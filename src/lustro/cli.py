@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from lustro.config import default_sources_text, load_config
@@ -23,13 +23,96 @@ def _file_age(path: Path, now: datetime) -> str:
     return f"{delta.days}d ago"
 
 
-def cmd_fetch(_args: argparse.Namespace) -> int:
-    print("fetch is not implemented yet (Phase 2).")
+def _get_last_scan_date(state: dict[str, str]) -> str:
+    dates = []
+    for value in state.values():
+        try:
+            dates.append(datetime.fromisoformat(value))
+        except (ValueError, TypeError):
+            pass
+    if dates:
+        return max(dates).strftime("%Y-%m-%d")
+    return (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def cmd_fetch(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    state = load_state(cfg.state_path)
+    from lustro.fetcher import archive_article, fetch_rss, fetch_web, fetch_x_account
+    from lustro.log import (
+        _title_prefix,
+        append_to_log,
+        format_markdown,
+        is_junk,
+        load_title_prefixes,
+        rotate_log,
+    )
+    from lustro.state import save_state, should_fetch
+
+    now = datetime.now(timezone.utc)
+    rotate_log(cfg.log_path, cfg.data_dir, cfg.config_data.get("max_log_lines", 500), now)
+
+    since_date = _get_last_scan_date(state)
+    title_prefixes = load_title_prefixes(cfg.log_path)
+    results: dict[str, list[dict[str, str]]] = {}
+    archived_count = 0
+
+    for source in cfg.sources:
+        name = source["name"]
+        cadence = source.get("cadence", "daily")
+        tier = source.get("tier", 2)
+        if not should_fetch(state, name, cadence, now=now):
+            continue
+        print(f"Fetching: {name}...", file=sys.stderr)
+        if "rss" in source:
+            articles = fetch_rss(source["rss"], since_date)
+        elif "handle" in source:
+            articles = fetch_x_account(source["handle"], since_date)
+        else:
+            articles = fetch_web(source.get("url", ""))
+
+        new_articles = []
+        for article in articles:
+            if is_junk(article["title"]):
+                continue
+            prefix = _title_prefix(article["title"])
+            if prefix in title_prefixes:
+                continue
+            new_articles.append(article)
+            title_prefixes.add(prefix)
+
+        if not args.no_archive:
+            for article in new_articles:
+                if article.get("link") and tier == 1:
+                    archive_article(article, name, tier, cfg.article_cache_dir, now)
+                    archived_count += 1
+
+        if new_articles:
+            results[name] = new_articles
+            state[name] = now.isoformat()
+        elif name not in state:
+            state[name] = now.isoformat()
+
+    save_state(cfg.state_path, state)
+    if not results:
+        print("No new articles found.", file=sys.stderr)
+        return 0
+    today = now.strftime("%Y-%m-%d")
+    md = format_markdown(results, today)
+    append_to_log(cfg.log_path, md)
+    total = sum(len(v) for v in results.values())
+    print(f"Logged {total} new articles.", file=sys.stderr)
     return 0
 
 
 def cmd_check(_args: argparse.Namespace) -> int:
-    print("check is not implemented yet (Phase 2).")
+    cfg = load_config()
+    state = load_state(cfg.state_path)
+    from lustro.fetcher import check_sources
+
+    web_sources = [s for s in cfg.sources if "handle" not in s]
+    x_accounts = [s for s in cfg.sources if "handle" in s]
+    check_sources(web_sources, x_accounts, state)
     return 0
 
 
@@ -115,7 +198,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
 
     p_fetch = sub.add_parser("fetch", help="Run daily fetch")
-    p_fetch.add_argument("--no-archive", action="store_true", help="Reserved for Phase 2")
+    p_fetch.add_argument("--no-archive", action="store_true", help="Skip archiving full article text")
 
     sub.add_parser("check", help="Health-check configured sources")
 
