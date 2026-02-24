@@ -7,7 +7,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Mapping
 
-
 _CADENCE_DAYS = {
     "daily": 0,
     "twice_weekly": 2,

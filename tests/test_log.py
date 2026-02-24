@@ -12,7 +12,8 @@ from lustro.log import (
 
 
 def test_title_prefix():
-    assert _title_prefix("The Future of Agent Systems: A Practical Guide") == "the future agent systems practical guide"
+    result = _title_prefix("The Future of Agent Systems: A Practical Guide")
+    assert result == "the future agent systems practical guide"
 
 
 def test_is_junk():

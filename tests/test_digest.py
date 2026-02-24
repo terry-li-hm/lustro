@@ -31,7 +31,8 @@ def _write_month_data(cfg, month: str):
             [
                 f"## {month}-24 (Automated Daily Scan)",
                 "### Example Log Source",
-                "- **[AI regulation update](https://example.com/reg)** (2026-02-24) — New policy activity",
+                "- **[AI regulation update](https://example.com/reg)**"
+                " (2026-02-24) — New policy activity",
             ]
         )
         + "\n",
@@ -142,7 +143,8 @@ def test_cmd_digest_writes_output_file(xdg_env, monkeypatch):
                     }
                 ]
             ),
-            "## Regulatory pressure on model governance\n\n### Summary\nTighter controls are becoming mandatory.",
+            "## Regulatory pressure on model governance\n\n"
+            "### Summary\nTighter controls are becoming mandatory.",
         ]
     )
     monkeypatch.setattr("lustro.digest.create_openai_client", lambda _key: fake_client)

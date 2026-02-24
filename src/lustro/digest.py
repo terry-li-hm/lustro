@@ -9,7 +9,6 @@ from typing import Any
 
 from lustro.config import LustroConfig
 
-
 DEFAULT_THEME_COUNT = 8
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
@@ -128,7 +127,8 @@ def identify_themes(
         if isinstance(text, str) and text:
             text_preview = " ".join(text.split()[:200])[:500]
         items.append(
-            f"[{i}] {article.get('date', '')} | {article.get('source', '')} | {article.get('title', '')}\n"
+            f"[{i}] {article.get('date', '')} | {article.get('source', '')}"
+            f" | {article.get('title', '')}\n"
             f"    Summary: {article.get('summary', '')}\n"
             f"    Preview: {text_preview}"
         )
@@ -136,13 +136,16 @@ def identify_themes(
     offset = len(articles)
     for i, entry in enumerate(log_entries):
         items.append(
-            f"[{offset + i}] {entry.get('date', '')} | {entry.get('source', '')} | {entry.get('title', '')}\n"
+            f"[{offset + i}] {entry.get('date', '')} | {entry.get('source', '')}"
+            f" | {entry.get('title', '')}\n"
             f"    Summary: {entry.get('summary', '')}"
         )
 
     system = (
-        "You identify thematic clusters in AI news for a consultant advising banks on AI strategy.\n\n"
-        f"Rules:\n- Identify {max_themes} themes most relevant to AI in banking/financial services\n"
+        "You identify thematic clusters in AI news for a consultant"
+        " advising banks on AI strategy.\n\n"
+        f"Rules:\n- Identify {max_themes} themes most relevant"
+        " to AI in banking/financial services\n"
         "- Each theme should have 3+ articles supporting it\n"
         '- Themes should be specific (not "AI progress")\n'
         "- Include cross-cutting themes (regulation, open-source vs proprietary, infrastructure)\n"

@@ -7,6 +7,9 @@ name = "lustro"
 version = "0.1.0"
 description = "Survey and illuminate the AI/tech landscape."
 requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Terry Li"}]
+readme = "README.md"
 dependencies = [
   "feedparser>=6",
   "requests>=2.28",
@@ -15,10 +18,19 @@ dependencies = [
   "beautifulsoup4>=4.12",
 ]
 
+[project.urls]
+Homepage = "https://github.com/terry-li-hm/lustro"
+Repository = "https://github.com/terry-li-hm/lustro"
+Issues = "https://github.com/terry-li-hm/lustro"
+
 [project.optional-dependencies]
 digest = [
   "openai>=1.0",
   "httpx>=0.24",
+]
+dev = [
+  "pytest>=7",
+  "ruff>=0.4",
 ]
 
 [project.scripts]
@@ -40,3 +52,11 @@ include = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+exclude = ["docs/reference"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]

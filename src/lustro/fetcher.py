@@ -17,7 +17,6 @@ import requests
 import trafilatura
 from bs4 import BeautifulSoup
 
-
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AI-News-Bot/1.0"
 }

@@ -226,7 +226,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
 
     p_fetch = sub.add_parser("fetch", help="Run daily fetch")
-    p_fetch.add_argument("--no-archive", action="store_true", help="Skip archiving full article text")
+    p_fetch.add_argument(
+        "--no-archive", action="store_true", help="Skip archiving full article text"
+    )
 
     sub.add_parser("check", help="Health-check configured sources")
 
