@@ -24,10 +24,10 @@ jobs:
         uses: astral-sh/setup-uv@v6
 
       - name: Install dependencies
-        run: uv pip install -e ".[digest]"
+        run: uv pip install --system -e ".[dev,digest]"
 
       - name: Ruff
-        run: uv run ruff check .
+        run: ruff check .
 
       - name: Pytest
-        run: uv run pytest
+        run: pytest
