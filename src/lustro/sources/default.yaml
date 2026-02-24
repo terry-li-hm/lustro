@@ -1,0 +1,60 @@
+web_sources:
+  - name: Simon Willison
+    tier: 1
+    cadence: daily
+    rss: https://simonwillison.net/atom/everything/
+    url: https://simonwillison.net/
+
+  - name: Hacker News Front Page
+    tier: 1
+    cadence: daily
+    rss: https://hnrss.org/frontpage
+    url: https://news.ycombinator.com/
+
+  - name: The Batch
+    tier: 1
+    cadence: weekly
+    rss: https://www.deeplearning.ai/the-batch/feed/
+    url: https://www.deeplearning.ai/the-batch/
+
+  - name: Anthropic Blog
+    tier: 1
+    cadence: twice_weekly
+    rss: https://www.anthropic.com/news/rss.xml
+    url: https://www.anthropic.com/news
+
+  - name: OpenAI Blog
+    tier: 1
+    cadence: weekly
+    rss: https://openai.com/news/rss.xml
+    url: https://openai.com/news/
+
+  - name: OpenAI Developer Blog
+    tier: 1
+    cadence: weekly
+    rss: https://developers.openai.com/blog/rss.xml
+    url: https://developers.openai.com/blog
+
+  - name: Google DeepMind Blog
+    tier: 2
+    cadence: weekly
+    rss: https://deepmind.google/discover/blog/rss.xml
+    url: https://deepmind.google/discover/blog/
+
+  - name: Hugging Face Blog
+    tier: 2
+    cadence: weekly
+    rss: https://huggingface.co/blog/feed.xml
+    url: https://huggingface.co/blog
+
+  - name: Stripe Engineering
+    tier: 2
+    cadence: weekly
+    rss: https://stripe.com/blog/feed.rss
+    url: https://stripe.com/blog/engineering
+
+  - name: GitHub Blog Engineering
+    tier: 2
+    cadence: weekly
+    rss: https://github.blog/engineering/feed/
+    url: https://github.blog/engineering/
