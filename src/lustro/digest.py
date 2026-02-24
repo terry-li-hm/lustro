@@ -163,8 +163,7 @@ def identify_themes(
         '    "banking_relevance": "Why this matters for banks/fintech"\n'
         "  }\n"
         "]\n\n"
-        "Articles:\n"
-        + "\n\n".join(items)
+        "Articles:\n" + "\n\n".join(items)
     )
     raw = _llm_call(client, model, system, user, max_tokens=4000)
     return _parse_theme_json(raw)
@@ -210,8 +209,7 @@ def synthesize_theme(
         "Produce an evidence brief with sections:\n"
         "## Theme\n### Summary\n### Claims & Evidence\n### Open Questions\n"
         "### Banking & Fintech Implications\n### Key Quotes\n\n"
-        "Source articles:\n\n"
-        + "\n\n---\n\n".join(context_parts)
+        "Source articles:\n\n" + "\n\n---\n\n".join(context_parts)
     )
     return _llm_call(client, model, system, user, max_tokens=6000)
 
@@ -263,15 +261,11 @@ def run_digest(
     articles = load_archived_articles(cfg.article_cache_dir, target_month)
     log_entries = load_news_log_entries(cfg.log_path, target_month)
     if not articles and not log_entries:
-        raise RuntimeError(
-            f"No data found for {target_month}. Run `lustro fetch` first."
-        )
+        raise RuntimeError(f"No data found for {target_month}. Run `lustro fetch` first.")
 
     api_key = _get_api_key()
     if not api_key:
-        raise RuntimeError(
-            "Missing API key. Set `LUSTRO_API_KEY` or `OPENROUTER_API_KEY`."
-        )
+        raise RuntimeError("Missing API key. Set `LUSTRO_API_KEY` or `OPENROUTER_API_KEY`.")
     client = create_openai_client(api_key)
 
     identified_themes = identify_themes(

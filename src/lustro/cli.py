@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from lustro.config import default_sources_text, load_config
 from lustro.state import load_state
+
+
+def _get_version() -> str:
+    try:
+        return importlib.metadata.version("lustro")
+    except importlib.metadata.PackageNotFoundError:
+        return "dev"
 
 
 def _file_age(path: Path, now: datetime) -> str:
@@ -163,6 +171,71 @@ def cmd_log(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_breaking(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    from lustro.breaking import run_breaking
+
+    return run_breaking(cfg=cfg, dry_run=bool(args.dry_run))
+
+
+def cmd_discover(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    from lustro.discover import run_discover
+
+    return run_discover(cfg=cfg, count=args.count)
+
+
+def cmd_sources(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    rows: list[tuple[str, str, int, str]] = []
+
+    web_sources = cfg.sources_data.get("web_sources", [])
+    if isinstance(web_sources, list):
+        for source in web_sources:
+            if not isinstance(source, dict):
+                continue
+            tier = int(source.get("tier", 2))
+            if args.tier is not None and tier != args.tier:
+                continue
+            source_type = "rss" if source.get("rss") else "web"
+            rows.append(
+                (
+                    str(source.get("name", "")),
+                    source_type,
+                    tier,
+                    str(source.get("cadence", "-")),
+                )
+            )
+
+    x_accounts = cfg.sources_data.get("x_accounts", [])
+    if isinstance(x_accounts, list):
+        for account in x_accounts:
+            if not isinstance(account, dict):
+                continue
+            tier = int(account.get("tier", 2))
+            if args.tier is not None and tier != args.tier:
+                continue
+            rows.append(
+                (
+                    str(account.get("name") or account.get("handle", "")),
+                    "x",
+                    tier,
+                    str(account.get("cadence", "-")),
+                )
+            )
+
+    if not rows:
+        print("No sources configured.")
+        return 0
+
+    print(f"{'Name':<36} {'Type':<4} {'Tier':>4} {'Cadence':<12}")
+    print("-" * 64)
+    for name, source_type, tier, cadence in rows:
+        print(f"{name[:36]:<36} {source_type:<4} {tier:>4} {cadence:<12}")
+    print(f"\nTotal: {len(rows)} sources")
+    return 0
+
+
 def cmd_status(_args: argparse.Namespace) -> int:
     cfg = load_config()
     now = datetime.now().astimezone()
@@ -179,11 +252,7 @@ def cmd_status(_args: argparse.Namespace) -> int:
     if state:
         print(f"Sources:       {len(state)} tracked")
         latest = max(
-            (
-                datetime.fromisoformat(ts)
-                for ts in state.values()
-                if isinstance(ts, str)
-            ),
+            (datetime.fromisoformat(ts) for ts in state.values() if isinstance(ts, str)),
             default=None,
         )
         if latest is not None:
@@ -222,6 +291,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="lustro",
         description="Survey and illuminate the AI/tech landscape",
+        epilog=(
+            'Shell completion: eval "$(register-python-argcomplete lustro)" (requires argcomplete)'
+        ),
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {_get_version()}",
     )
     sub = parser.add_subparsers(dest="command")
 
@@ -241,6 +318,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_log = sub.add_parser("log", help="Tail the news log")
     p_log.add_argument("--lines", "-n", type=int, default=50, help="Number of lines")
 
+    p_breaking = sub.add_parser("breaking", help="Check for breaking AI news")
+    p_breaking.add_argument("--dry-run", action="store_true")
+
+    p_discover = sub.add_parser("discover", help="Find new X handles from For You feed")
+    p_discover.add_argument("--count", type=int, help="Number of tweets to scan")
+
+    p_sources = sub.add_parser("sources", help="List configured sources")
+    p_sources.add_argument("--tier", type=int, help="Filter sources by tier")
+
     sub.add_parser("status", help="Show paths and state ages")
     sub.add_parser("init", help="Create config/cache/data dirs and starter sources")
 
@@ -258,6 +344,9 @@ def main() -> int:
         "check": cmd_check,
         "digest": cmd_digest,
         "log": cmd_log,
+        "breaking": cmd_breaking,
+        "discover": cmd_discover,
+        "sources": cmd_sources,
         "status": cmd_status,
         "init": cmd_init,
     }

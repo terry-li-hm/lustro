@@ -17,9 +17,7 @@ import requests
 import trafilatura
 from bs4 import BeautifulSoup
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AI-News-Bot/1.0"
-}
+HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AI-News-Bot/1.0"}
 TIMEOUT = 15
 ARCHIVE_TIMEOUT = 10
 
@@ -74,9 +72,7 @@ def fetch_rss(url: str, since_date: str, max_items: int = 5) -> list[dict[str, s
                 continue
             summary = _extract_summary(entry)
             link = str(_entry_get(entry, "link", ""))
-            articles.append(
-                {"title": title, "date": date_str, "summary": summary, "link": link}
-            )
+            articles.append({"title": title, "date": date_str, "summary": summary, "link": link})
             if len(articles) >= max_items:
                 break
         return articles
@@ -92,25 +88,19 @@ def fetch_web(url: str, max_items: int = 5) -> list[dict[str, str]]:
         soup = BeautifulSoup(resp.text, "html.parser")
 
         articles: list[dict[str, str]] = []
-        for tag in soup.select("article h2 a, article h3 a, h2 a, h3 a, .post-title a")[
-            :max_items
-        ]:
+        for tag in soup.select("article h2 a, article h3 a, h2 a, h3 a, .post-title a")[:max_items]:
             title = tag.get_text().strip()
             if title and len(title) > 10:
                 link = tag.get("href", "")
                 if link and not link.startswith("http"):
                     link = urljoin(url, link)
-                articles.append(
-                    {"title": title, "date": "", "summary": "", "link": str(link)}
-                )
+                articles.append({"title": title, "date": "", "summary": "", "link": str(link)})
 
         if not articles:
             for tag in soup.select("h2, h3")[:max_items]:
                 title = tag.get_text().strip()
                 if title and len(title) > 20:
-                    articles.append(
-                        {"title": title, "date": "", "summary": "", "link": ""}
-                    )
+                    articles.append({"title": title, "date": "", "summary": "", "link": ""})
 
         return articles
     except Exception as exc:
@@ -118,9 +108,7 @@ def fetch_web(url: str, max_items: int = 5) -> list[dict[str, str]]:
         return []
 
 
-def fetch_x_account(
-    handle: str, since_date: str, max_items: int = 5
-) -> list[dict[str, str]]:
+def fetch_x_account(handle: str, since_date: str, max_items: int = 5) -> list[dict[str, str]]:
     clean = handle.lstrip("@")
     bird_cli = shutil.which("bird")
     if bird_cli is None:

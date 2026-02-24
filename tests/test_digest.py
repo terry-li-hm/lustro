@@ -49,9 +49,7 @@ class _FakeOpenAIClient:
 
     def _create(self, **_kwargs):
         content = self._outputs.pop(0)
-        return SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
-        )
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
 
 
 def test_create_openai_client_missing_dependency(monkeypatch):

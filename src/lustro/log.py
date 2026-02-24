@@ -13,9 +13,7 @@ def load_title_prefixes(log_path: Path) -> set[str]:
     content = log_path.read_text(encoding="utf-8")
     prefixes: set[str] = set()
 
-    for match in re.finditer(
-        r'\*\*["\u201c]?(?:\[)?(.+?)(?:\]\([^)]*\))?["\u201d]?\*\*', content
-    ):
+    for match in re.finditer(r'\*\*["\u201c]?(?:\[)?(.+?)(?:\]\([^)]*\))?["\u201d]?\*\*', content):
         title = match.group(1).strip()
         prefix = _title_prefix(title)
         if prefix:

@@ -86,9 +86,7 @@ def load_config() -> LustroConfig:
     log_path = _expand_path(str(log_path_raw))
     digest_output_raw = config_data.get("digest_output_dir", str(data_dir / "digests"))
     digest_output_dir = _expand_path(str(digest_output_raw))
-    digest_model = str(
-        config_data.get("digest_model", "google/gemini-3-flash-preview")
-    )
+    digest_model = str(config_data.get("digest_model", "google/gemini-3-flash-preview"))
 
     return LustroConfig(
         config_dir=config_dir,
