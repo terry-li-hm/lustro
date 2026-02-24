@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lustro"
-version = "0.1.0"
+version = "0.2.0"
 description = "Survey and illuminate the AI/tech landscape."
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -56,7 +56,7 @@ testpaths = ["tests"]
 [tool.ruff]
 target-version = "py310"
 line-length = 100
-exclude = ["docs/reference"]
+exclude = ["docs"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
