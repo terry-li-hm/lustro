@@ -116,8 +116,36 @@ def cmd_check(_args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_digest(_args: argparse.Namespace) -> int:
-    print("digest is not implemented yet (Phase 3).")
+def cmd_digest(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    from lustro.digest import run_digest
+
+    try:
+        themes, output_path = run_digest(
+            cfg=cfg,
+            month=args.month,
+            dry_run=bool(args.dry_run),
+            themes=args.themes,
+            model=args.model,
+        )
+    except RuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Found {len(themes)} themes.", file=sys.stderr)
+    for i, theme in enumerate(themes, 1):
+        name = theme.get("theme", f"Theme {i}")
+        count = len(theme.get("article_indices", []))
+        print(f"{i}. {name} ({count} articles)", file=sys.stderr)
+
+    if args.dry_run:
+        import json
+
+        print(json.dumps(themes, indent=2, ensure_ascii=False))
+        return 0
+
+    if output_path is not None:
+        print(f"Digest written: {output_path}", file=sys.stderr)
     return 0
 
 

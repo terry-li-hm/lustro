@@ -49,6 +49,8 @@ class LustroConfig:
     state_path: Path
     log_path: Path
     article_cache_dir: Path
+    digest_output_dir: Path
+    digest_model: str
     config_data: dict[str, Any] = field(default_factory=dict)
     sources_data: dict[str, Any] = field(default_factory=dict)
 
@@ -82,6 +84,11 @@ def load_config() -> LustroConfig:
 
     log_path_raw = config_data.get("log_path", str(data_dir / "news.md"))
     log_path = _expand_path(str(log_path_raw))
+    digest_output_raw = config_data.get("digest_output_dir", str(data_dir / "digests"))
+    digest_output_dir = _expand_path(str(digest_output_raw))
+    digest_model = str(
+        config_data.get("digest_model", "google/gemini-3-flash-preview")
+    )
 
     return LustroConfig(
         config_dir=config_dir,
@@ -92,6 +99,8 @@ def load_config() -> LustroConfig:
         state_path=state_path,
         log_path=log_path,
         article_cache_dir=article_cache_dir,
+        digest_output_dir=digest_output_dir,
+        digest_model=digest_model,
         config_data=config_data,
         sources_data=sources_data,
     )
