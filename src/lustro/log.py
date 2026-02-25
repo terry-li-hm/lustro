@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import re
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -58,6 +60,29 @@ def is_junk(title: str) -> bool:
     return norm in junk or norm.startswith("量子位编辑")
 
 
+def _atomic_write(path: Path, content: str) -> None:
+    """Write file atomically via tempfile + fsync + os.replace."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
+            tmp_file.write(content)
+            tmp_file.flush()
+            os.fsync(tmp_file.fileno())
+        os.replace(tmp_name, path)
+    finally:
+        if os.path.exists(tmp_name):
+            os.unlink(tmp_name)
+
+
+def _sanitize_text(text: str) -> str:
+    """Strip newlines and leading markdown control chars to prevent log injection."""
+    text = " ".join(text.split())
+    if text.startswith(("#", "-", ">", "!")):
+        text = "\\" + text
+    return text
+
+
 def format_markdown(results: dict[str, list[dict[str, str]]], date_str: str) -> str:
     lines = [f"## {date_str} (Automated Daily Scan)\n"]
     for source, articles in results.items():
@@ -66,8 +91,9 @@ def format_markdown(results: dict[str, list[dict[str, str]]], date_str: str) -> 
         lines.append(f"### {source}\n")
         for article in articles:
             date_part = f" ({article['date']})" if article.get("date") else ""
-            summary_part = f" — {article['summary']}" if article.get("summary") else ""
-            title = article.get("title", "")
+            raw_summary = article.get("summary", "")
+            summary_part = f" — {_sanitize_text(raw_summary)}" if raw_summary else ""
+            title = _sanitize_text(article.get("title", ""))
             title_part = f"[{title}]({article['link']})" if article.get("link") else title
             lines.append(f"- **{title_part}**{date_part}{summary_part}")
         lines.append("")
@@ -77,8 +103,7 @@ def format_markdown(results: dict[str, list[dict[str, str]]], date_str: str) -> 
 def append_to_log(log_path: Path, markdown: str) -> None:
     marker = "<!-- News entries below -->"
     if not log_path.exists():
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        log_path.write_text(markdown, encoding="utf-8")
+        _atomic_write(log_path, markdown)
         return
 
     content = log_path.read_text(encoding="utf-8")
@@ -86,7 +111,7 @@ def append_to_log(log_path: Path, markdown: str) -> None:
         content = content.replace(marker, f"{marker}\n\n{markdown}", 1)
     else:
         content += f"\n\n{markdown}"
-    log_path.write_text(content, encoding="utf-8")
+    _atomic_write(log_path, content)
 
 
 def rotate_log(
@@ -132,7 +157,7 @@ def rotate_log(
             fh.write(f"# {log_path.stem} Archive - {month}\n\n")
         fh.write("\n".join(old) + "\n")
 
-    log_path.write_text("\n".join(header + recent) + "\n", encoding="utf-8")
+    _atomic_write(log_path, "\n".join(header + recent) + "\n")
     print(
         f"Rotated: archived {len(old)} lines to {archive_path.name}, kept {len(recent)} lines.",
         file=sys.stderr,

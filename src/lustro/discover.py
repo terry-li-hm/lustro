@@ -71,7 +71,7 @@ def _append_discovery_log(
     append_to_log(cfg.log_path, "\n".join(lines) + "\n")
 
 
-def run_discover(cfg: LustroConfig, count: int | None = None) -> int:
+def run_discover(cfg: LustroConfig, count: int | None = None, bird_path: str | None = None) -> int:
     discovery_cfg = cfg.sources_data.get("x_discovery", {})
     if not isinstance(discovery_cfg, dict):
         discovery_cfg = {}
@@ -84,7 +84,7 @@ def run_discover(cfg: LustroConfig, count: int | None = None) -> int:
     tweet_count = int(count) if count is not None else default_count
     tweet_count = max(tweet_count, 1)
 
-    bird_cli = shutil.which("bird")
+    bird_cli = bird_path or shutil.which("bird")
     if bird_cli is None:
         print("bird CLI not found - skipping X discovery", file=sys.stderr)
         return 0

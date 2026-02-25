@@ -15,6 +15,7 @@ from typing import Any
 from lustro.config import LustroConfig
 from lustro.fetcher import fetch_rss, fetch_web
 from lustro.log import append_to_log
+from lustro.state import lockfile
 
 MAX_ALERTS_PER_DAY = 3
 COOLDOWN_MINUTES = 60
@@ -118,8 +119,14 @@ def can_alert(state: dict[str, Any], now: datetime) -> bool:
     return (now - last_dt).total_seconds() >= COOLDOWN_MINUTES * 60
 
 
-def _resolve_tg_notify() -> str | None:
-    return shutil.which("tg-notify.sh") or str(Path.home() / "scripts" / "tg-notify.sh")
+def _resolve_tg_notify(cfg_path: str | None = None) -> str | None:
+    if cfg_path:
+        return cfg_path if Path(cfg_path).is_file() else None
+    found = shutil.which("tg-notify.sh")
+    if found:
+        return found
+    fallback = Path.home() / "scripts" / "tg-notify.sh"
+    return str(fallback) if fallback.is_file() else None
 
 
 def _source_candidates(cfg: LustroConfig) -> list[dict[str, Any]]:
@@ -135,7 +142,14 @@ def _source_candidates(cfg: LustroConfig) -> list[dict[str, Any]]:
     ]
 
 
-def _send_alert(title: str, link: str, source: str, now: datetime, dry_run: bool) -> None:
+def _send_alert(
+    title: str,
+    link: str,
+    source: str,
+    now: datetime,
+    dry_run: bool,
+    tg_notify_path: str | None = None,
+) -> None:
     if link:
         msg = f"🚨 *Breaking:* [{title}]({link})\nSource: {source} • {now.strftime('%H:%M')} UTC"
     else:
@@ -145,13 +159,15 @@ def _send_alert(title: str, link: str, source: str, now: datetime, dry_run: bool
         print(f"[DRY RUN] {msg}", file=sys.stderr)
         return
 
-    tg_notify = _resolve_tg_notify()
-    if tg_notify is None or not Path(tg_notify).exists():
+    tg_notify = _resolve_tg_notify(tg_notify_path)
+    if tg_notify is None:
         print("tg-notify.sh not found; skipping Telegram send.", file=sys.stderr)
         return
 
     try:
-        subprocess.run([tg_notify, msg], check=True, capture_output=True, timeout=30)
+        subprocess.run(
+            [tg_notify], input=msg, text=True, check=True, capture_output=True, timeout=30
+        )
     except Exception as exc:
         print(f"Telegram error: {exc}", file=sys.stderr)
 
@@ -180,6 +196,16 @@ def run_breaking(
     if state_path is None:
         state_path = cfg.cache_dir / "breaking-state.json"
 
+    with lockfile(state_path):
+        return _run_breaking_locked(cfg, dry_run, now, state_path)
+
+
+def _run_breaking_locked(
+    cfg: LustroConfig,
+    dry_run: bool,
+    now: datetime,
+    state_path: Path,
+) -> int:
     state = load_breaking_state(state_path, now)
     reset_daily_counter(state, now)
 
@@ -227,7 +253,10 @@ def run_breaking(
         if not dry_run and not can_alert(state, now):
             print(f"Throttled: {match['title']}", file=sys.stderr)
             continue
-        _send_alert(match["title"], match.get("link", ""), match["source"], now, dry_run)
+        _send_alert(
+            match["title"], match.get("link", ""), match["source"], now, dry_run,
+            tg_notify_path=cfg.tg_notify_path,
+        )
         if not dry_run:
             state["alerts_today"] = int(state.get("alerts_today", 0)) + 1
             state["last_alert_time"] = now.isoformat()

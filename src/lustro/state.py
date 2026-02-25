@@ -1,11 +1,36 @@
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
 import os
+import sys
 import tempfile
+from collections.abc import Generator
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Mapping
+
+
+@contextlib.contextmanager
+def lockfile(path: Path) -> Generator[None, None, None]:
+    """Advisory file lock to prevent concurrent execution."""
+    lock_path = path.with_suffix(".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(str(lock_path), os.O_CREAT | os.O_WRONLY)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            print(f"Another lustro process is running (lock: {lock_path})", file=sys.stderr)
+            raise SystemExit(1)
+        yield
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+        with contextlib.suppress(OSError):
+            lock_path.unlink()
+
 
 _CADENCE_DAYS = {
     "daily": 0,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -51,6 +52,8 @@ class LustroConfig:
     article_cache_dir: Path
     digest_output_dir: Path
     digest_model: str
+    bird_path: str | None = None
+    tg_notify_path: str | None = None
     config_data: dict[str, Any] = field(default_factory=dict)
     sources_data: dict[str, Any] = field(default_factory=dict)
 
@@ -61,6 +64,22 @@ class LustroConfig:
             if isinstance(section, list):
                 result.extend(item for item in section if isinstance(item, dict))
         return result
+
+    def resolve_bird(self) -> str | None:
+        """Resolve bird CLI path: config override, then PATH lookup."""
+        if self.bird_path:
+            return self.bird_path if Path(self.bird_path).is_file() else None
+        return shutil.which("bird")
+
+    def resolve_tg_notify(self) -> str | None:
+        """Resolve tg-notify.sh path: config override, then PATH lookup."""
+        if self.tg_notify_path:
+            return self.tg_notify_path if Path(self.tg_notify_path).is_file() else None
+        found = shutil.which("tg-notify.sh")
+        if found:
+            return found
+        fallback = Path.home() / "scripts" / "tg-notify.sh"
+        return str(fallback) if fallback.is_file() else None
 
 
 def load_config() -> LustroConfig:
@@ -87,6 +106,8 @@ def load_config() -> LustroConfig:
     digest_output_raw = config_data.get("digest_output_dir", str(data_dir / "digests"))
     digest_output_dir = _expand_path(str(digest_output_raw))
     digest_model = str(config_data.get("digest_model", "google/gemini-3-flash-preview"))
+    bird_path = config_data.get("bird_path")
+    tg_notify_path = config_data.get("tg_notify_path")
 
     return LustroConfig(
         config_dir=config_dir,
@@ -99,6 +120,8 @@ def load_config() -> LustroConfig:
         article_cache_dir=article_cache_dir,
         digest_output_dir=digest_output_dir,
         digest_model=digest_model,
+        bird_path=str(bird_path) if bird_path else None,
+        tg_notify_path=str(tg_notify_path) if tg_notify_path else None,
         config_data=config_data,
         sources_data=sources_data,
     )

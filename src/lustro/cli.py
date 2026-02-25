@@ -6,8 +6,8 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from lustro.config import default_sources_text, load_config
-from lustro.state import load_state
+from lustro.config import LustroConfig, default_sources_text, load_config
+from lustro.state import load_state, lockfile
 
 
 def _get_version() -> str:
@@ -54,6 +54,11 @@ def _get_last_scan_date(state: dict[str, str]) -> str:
 
 def cmd_fetch(args: argparse.Namespace) -> int:
     cfg = load_config()
+    with lockfile(cfg.state_path):
+        return _cmd_fetch_locked(args, cfg)
+
+
+def _cmd_fetch_locked(args: argparse.Namespace, cfg: LustroConfig) -> int:
     state = load_state(cfg.state_path)
     from lustro.fetcher import archive_article, fetch_rss, fetch_web, fetch_x_account
     from lustro.log import (
@@ -84,7 +89,7 @@ def cmd_fetch(args: argparse.Namespace) -> int:
         if "rss" in source:
             articles = fetch_rss(source["rss"], since_date)
         elif "handle" in source:
-            articles = fetch_x_account(source["handle"], since_date)
+            articles = fetch_x_account(source["handle"], since_date, bird_path=cfg.resolve_bird())
         else:
             articles = fetch_web(source.get("url", ""))
 
@@ -129,7 +134,7 @@ def cmd_check(_args: argparse.Namespace) -> int:
 
     web_sources = [s for s in cfg.sources if "handle" not in s]
     x_accounts = [s for s in cfg.sources if "handle" in s]
-    check_sources(web_sources, x_accounts, state)
+    check_sources(web_sources, x_accounts, state, bird_path=cfg.resolve_bird())
     return 0
 
 
@@ -192,7 +197,7 @@ def cmd_discover(args: argparse.Namespace) -> int:
     cfg = load_config()
     from lustro.discover import run_discover
 
-    return run_discover(cfg=cfg, count=args.count)
+    return run_discover(cfg=cfg, count=args.count, bird_path=cfg.resolve_bird())
 
 
 def cmd_sources(args: argparse.Namespace) -> int:

@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import feedparser
 import requests
@@ -18,6 +20,25 @@ import trafilatura
 from bs4 import BeautifulSoup
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AI-News-Bot/1.0"}
+
+
+def _is_safe_url(url: str) -> bool:
+    """Block URLs targeting private/reserved IP ranges (SSRF protection)."""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        addrs = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        for _family, _type, _proto, _canonname, sockaddr in addrs:
+            ip = ipaddress.ip_address(sockaddr[0])
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                return False
+    except (socket.gaierror, ValueError, OSError):
+        return False
+    return True
 TIMEOUT = 15
 ARCHIVE_TIMEOUT = 10
 
@@ -108,9 +129,11 @@ def fetch_web(url: str, max_items: int = 5) -> list[dict[str, str]]:
         return []
 
 
-def fetch_x_account(handle: str, since_date: str, max_items: int = 5) -> list[dict[str, str]]:
+def fetch_x_account(
+    handle: str, since_date: str, max_items: int = 5, bird_path: str | None = None
+) -> list[dict[str, str]]:
     clean = handle.lstrip("@")
-    bird_cli = shutil.which("bird")
+    bird_cli = bird_path or shutil.which("bird")
     if bird_cli is None:
         print("bird CLI not found - skipping X fetch", file=sys.stderr)
         return []
@@ -184,6 +207,10 @@ def archive_article(
     if filepath.exists():
         return
 
+    if not _is_safe_url(link):
+        print(f"  Blocked (SSRF): {link}", file=sys.stderr)
+        return
+
     text = None
     try:
         downloaded = trafilatura.fetch_url(link)
@@ -214,6 +241,7 @@ def check_sources(
     x_accounts: list[dict[str, Any]],
     state: Mapping[str, str],
     now: datetime | None = None,
+    bird_path: str | None = None,
 ) -> None:
     if now is None:
         now = datetime.now(timezone.utc)
@@ -263,7 +291,7 @@ def check_sources(
 
         print(f"{name:<36} {tier:>1} {code:>5} {scan_col:>12}{flag}", file=sys.stderr)
 
-    bird_cli = shutil.which("bird")
+    bird_cli = bird_path or shutil.which("bird")
     if bird_cli is not None:
         print(
             f"\n{'X Account':<25} {'T':>1} {'Status':>8} {'Last Tweet':>12}",
