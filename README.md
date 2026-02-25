@@ -109,6 +109,8 @@ log_path: ~/.local/share/lustro/news.md
 digest_model: google/gemini-3-flash-preview
 max_log_lines: 500
 digest_output_dir: ~/.local/share/lustro/digests
+bird_path: /usr/local/bin/bird
+tg_notify_path: /usr/local/bin/tg-notify.sh
 ```
 
 Supported options:
@@ -117,6 +119,8 @@ Supported options:
 - `digest_model`: OpenRouter model ID.
 - `max_log_lines`: log rotation threshold.
 - `digest_output_dir`: digest markdown output directory.
+- `bird_path`: absolute path to `bird` CLI (default: auto-detect from `PATH`).
+- `tg_notify_path`: absolute path to `tg-notify.sh` (default: auto-detect from `PATH`).
 
 ## Source Format
 
