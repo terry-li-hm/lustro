@@ -31,13 +31,22 @@ def _file_age(path: Path, now: datetime) -> str:
     return f"{delta.days}d ago"
 
 
+def _parse_aware(value: str) -> datetime | None:
+    try:
+        dt = datetime.fromisoformat(value)
+    except (ValueError, TypeError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _get_last_scan_date(state: dict[str, str]) -> str:
     dates = []
     for value in state.values():
-        try:
-            dates.append(datetime.fromisoformat(value))
-        except (ValueError, TypeError):
-            pass
+        dt = _parse_aware(value)
+        if dt is not None:
+            dates.append(dt)
     if dates:
         return max(dates).strftime("%Y-%m-%d")
     return (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -165,8 +174,9 @@ def cmd_log(args: argparse.Namespace) -> int:
     lines = cfg.log_path.read_text(encoding="utf-8").splitlines()
     while lines and not lines[-1].strip():
         lines.pop()
-    if args.lines and args.lines < len(lines):
-        lines = lines[-args.lines :]
+    n = max(0, args.lines) if args.lines else 0
+    if n and n < len(lines):
+        lines = lines[-n:]
     print("\n".join(lines))
     return 0
 
@@ -252,7 +262,7 @@ def cmd_status(_args: argparse.Namespace) -> int:
     if state:
         print(f"Sources:       {len(state)} tracked")
         latest = max(
-            (datetime.fromisoformat(ts) for ts in state.values() if isinstance(ts, str)),
+            (dt for ts in state.values() if isinstance(ts, str) for dt in [_parse_aware(ts)] if dt),
             default=None,
         )
         if latest is not None:
@@ -264,6 +274,10 @@ def cmd_status(_args: argparse.Namespace) -> int:
         print(f"Article cache: {len(files)} files, {size_kb:.0f} KB")
     else:
         print(f"Article cache: missing ({cfg.article_cache_dir})")
+
+    if not cfg.sources_path.exists():
+        print("\nRun 'lustro init' to set up configuration.", file=sys.stderr)
+        return 1
     return 0
 
 
