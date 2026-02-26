@@ -88,6 +88,10 @@ def _cmd_fetch_locked(args: argparse.Namespace, cfg: LustroConfig) -> int:
         print(f"Fetching: {name}...", file=sys.stderr)
         if "rss" in source:
             articles = fetch_rss(source["rss"], since_date)
+            if articles is None and "url" in source:
+                print(f"  Falling back to web: {source['url']}", file=sys.stderr)
+                articles = fetch_web(source["url"])
+            articles = articles or []
         elif "handle" in source:
             articles = fetch_x_account(source["handle"], since_date, bird_path=cfg.resolve_bird())
         else:
@@ -112,8 +116,18 @@ def _cmd_fetch_locked(args: argparse.Namespace, cfg: LustroConfig) -> int:
         if new_articles:
             results[name] = new_articles
             state[name] = now.isoformat()
-        elif name not in state:
-            state[name] = now.isoformat()
+            state.pop(f"_zeros:{name}", None)
+        else:
+            if name not in state:
+                state[name] = now.isoformat()
+            z_key = f"_zeros:{name}"
+            zeros = int(state.get(z_key, 0)) + 1
+            state[z_key] = str(zeros)
+            if zeros >= 5:
+                print(
+                    f"  Warning: {name} has {zeros} consecutive zero-article fetches",
+                    file=sys.stderr,
+                )
 
     save_state(cfg.state_path, state)
     if not results:

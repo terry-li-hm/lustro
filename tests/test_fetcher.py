@@ -32,7 +32,7 @@ def test_fetch_rss(monkeypatch):
     ]
     monkeypatch.setattr(
         "lustro.fetcher.feedparser.parse",
-        lambda _url, request_headers: SimpleNamespace(entries=entries),
+        lambda _url, request_headers: SimpleNamespace(entries=entries, bozo=False),
     )
 
     articles = fetch_rss("https://example.com/feed.xml", "2026-02-23")
@@ -41,6 +41,16 @@ def test_fetch_rss(monkeypatch):
     assert articles[0]["title"] == "New post"
     assert articles[0]["date"] == "2026-02-24"
     assert articles[0]["summary"] == "New summary sentence one"
+
+
+def test_fetch_rss_dead_feed(monkeypatch):
+    monkeypatch.setattr(
+        "lustro.fetcher.feedparser.parse",
+        lambda _url, request_headers: SimpleNamespace(bozo=True, status=404),
+    )
+
+    articles = fetch_rss("https://example.com/dead.xml", "2026-02-23")
+    assert articles is None
 
 
 def test_fetch_web(monkeypatch):
@@ -115,3 +125,23 @@ def test_fetch_x_account(monkeypatch):
     assert len(articles) == 1
     assert articles[0]["date"] == "2026-02-24"
     assert articles[0]["link"] == "https://x.com/alice/status/222"
+
+
+def test_check_sources_zeros(monkeypatch, capsys):
+    from lustro.fetcher import check_sources
+
+    sources = [{"name": "ZeroSource", "tier": 1, "url": "https://example.com"}]
+    state = {"_zeros:ZeroSource": "3"}
+    now = datetime(2026, 2, 24, 12, 0, tzinfo=timezone.utc)
+
+    class FakeResp:
+        status_code = 200
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("lustro.fetcher.requests.get", lambda *args, **kwargs: FakeResp())
+
+    check_sources(sources, [], state, now=now)
+    stderr = capsys.readouterr().err
+    assert "(3x0)" in stderr

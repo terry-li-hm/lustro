@@ -254,7 +254,11 @@ def _run_breaking_locked(
             print(f"Throttled: {match['title']}", file=sys.stderr)
             continue
         _send_alert(
-            match["title"], match.get("link", ""), match["source"], now, dry_run,
+            match["title"],
+            match.get("link", ""),
+            match["source"],
+            now,
+            dry_run,
             tg_notify_path=cfg.tg_notify_path,
         )
         if not dry_run:

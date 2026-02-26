@@ -39,6 +39,8 @@ def _is_safe_url(url: str) -> bool:
     except (socket.gaierror, ValueError, OSError):
         return False
     return True
+
+
 TIMEOUT = 15
 ARCHIVE_TIMEOUT = 10
 
@@ -80,9 +82,23 @@ def _extract_summary(entry: Any) -> str:
     return first[:120]
 
 
-def fetch_rss(url: str, since_date: str, max_items: int = 5) -> list[dict[str, str]]:
+def fetch_rss(url: str, since_date: str, max_items: int = 5) -> list[dict[str, str]] | None:
     try:
         feed = feedparser.parse(url, request_headers=HEADERS)
+
+        # Dead-feed detection
+        status = getattr(feed, "status", None)
+        if getattr(feed, "bozo", False):
+            if isinstance(status, int) and status >= 400:
+                print(f"  RSS dead (HTTP {status}): {url}", file=sys.stderr)
+                return None
+            if not hasattr(feed, "entries") or not feed.entries:
+                print(f"  RSS dead (bozo + no entries): {url}", file=sys.stderr)
+                return None
+
+        if not hasattr(feed, "entries"):
+            return None
+
         articles: list[dict[str, str]] = []
         for entry in feed.entries[: max_items * 2]:
             title = str(_entry_get(entry, "title", "")).strip()
@@ -266,6 +282,8 @@ def check_sources(
         else:
             scan_col = "never"
 
+        zeros = int(state.get(f"_zeros:{source['name']}", 0))
+
         if not url:
             print(f"{name:<36} {tier:>1} {'-':>5} {scan_col:>12}", file=sys.stderr)
             continue
@@ -288,6 +306,9 @@ def check_sources(
             if days_num > 60:
                 stale.append(source["name"])
                 flag = " (stale)"
+
+        if zeros >= 3:
+            flag += f" ({zeros}x0)"
 
         print(f"{name:<36} {tier:>1} {code:>5} {scan_col:>12}{flag}", file=sys.stderr)
 

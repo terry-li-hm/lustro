@@ -32,7 +32,7 @@ web_sources:
   - name: OpenAI Developer Blog
     tier: 1
     cadence: weekly
-    rss: https://developers.openai.com/blog/rss.xml
+    # RSS dead (404) as of Feb 2026
     url: https://developers.openai.com/blog
 
   - name: Google DeepMind Blog
