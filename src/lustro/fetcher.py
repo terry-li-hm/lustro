@@ -19,7 +19,9 @@ import requests
 import trafilatura
 from bs4 import BeautifulSoup
 
-HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AI-News-Bot/1.0"}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; Lustro/0.2; +https://github.com/terry-li-hm/lustro)"
+}
 
 
 def _is_safe_url(url: str) -> bool:
