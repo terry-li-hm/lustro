@@ -220,6 +220,9 @@ def _run_breaking_locked(
         source_name = str(source.get("name", "Unknown Source"))
         if source.get("rss"):
             articles = fetch_rss(str(source["rss"]), since_date, max_items=10)
+            if articles is None and source.get("url"):
+                articles = fetch_web(str(source["url"]), max_items=8)
+            articles = articles or []
         else:
             articles = fetch_web(str(source.get("url", "")), max_items=8)
 
