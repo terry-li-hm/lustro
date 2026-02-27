@@ -192,6 +192,50 @@ def fetch_x_account(
         return []
 
 
+def fetch_x_bookmarks(
+    since_date: str, max_items: int = 10, bird_path: str | None = None
+) -> list[dict[str, str]]:
+    bird_cli = bird_path or shutil.which("bird")
+    if bird_cli is None:
+        print("bird CLI not found - skipping bookmarks fetch", file=sys.stderr)
+        return []
+
+    try:
+        proc = subprocess.run(
+            [bird_cli, "bookmarks", "-n", str(max_items * 2), "--json"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if proc.returncode != 0:
+            print(f"  bird bookmarks error: {proc.stderr.strip()[:80]}", file=sys.stderr)
+            return []
+
+        tweets = json.loads(proc.stdout)
+        articles: list[dict[str, str]] = []
+        for tweet in tweets:
+            date_str = _parse_tweet_date(tweet.get("createdAt", ""))
+            if date_str and date_str <= since_date:
+                continue
+            text = tweet.get("text", "").strip()
+            if not text or len(text) < 20:
+                continue
+            title = text[:120] + ("..." if len(text) > 120 else "")
+            tweet_id = tweet.get("id", "")
+            username = tweet.get("author", {}).get("username", "")
+            link = f"https://x.com/{username}/status/{tweet_id}" if tweet_id and username else ""
+            articles.append({"title": title, "date": date_str, "summary": "", "link": link})
+            if len(articles) >= max_items:
+                break
+        return articles
+    except subprocess.TimeoutExpired:
+        print("  bird bookmarks timeout", file=sys.stderr)
+        return []
+    except Exception as exc:
+        print(f"  bird bookmarks error: {exc}", file=sys.stderr)
+        return []
+
+
 def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower().strip())[:60].strip("-")
 
@@ -260,6 +304,7 @@ def check_sources(
     state: Mapping[str, str],
     now: datetime | None = None,
     bird_path: str | None = None,
+    x_bookmarks: list[dict[str, Any]] | None = None,
 ) -> None:
     if now is None:
         now = datetime.now(timezone.utc)
@@ -353,10 +398,29 @@ def check_sources(
     else:
         print("\nbird CLI not found - skipping X account check", file=sys.stderr)
 
-    print(
-        f"\nTotal: {len(sources)} web/RSS + {len(x_accounts)} X accounts",
-        file=sys.stderr,
-    )
+    if x_bookmarks and bird_cli is not None:
+        print(f"\n{'X Bookmarks':<25} {'T':>1} {'Status':>8}", file=sys.stderr)
+        print("-" * 38, file=sys.stderr)
+        for bm in x_bookmarks:
+            name = bm.get("name", "X Bookmarks")[:24]
+            tier = bm.get("tier", 2)
+            try:
+                proc = subprocess.run(
+                    [bird_cli, "bookmarks", "-n", "1", "--json"],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+                status = "OK" if proc.returncode == 0 else "FAIL"
+                print(f"{name:<25} {tier:>1} {status:>8}", file=sys.stderr)
+            except Exception as exc:
+                print(f"{name:<25} {tier:>1} {'ERR':>8} {str(exc)[:20]}", file=sys.stderr)
+
+    bm_count = len(x_bookmarks) if x_bookmarks else 0
+    parts = [f"{len(sources)} web/RSS", f"{len(x_accounts)} X accounts"]
+    if bm_count:
+        parts.append(f"{bm_count} bookmarks")
+    print(f"\nTotal: {' + '.join(parts)}", file=sys.stderr)
     if broken:
         print(f"Broken ({len(broken)}): {', '.join(broken)}", file=sys.stderr)
     if stale:

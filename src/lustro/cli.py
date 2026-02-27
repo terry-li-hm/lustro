@@ -60,7 +60,7 @@ def cmd_fetch(args: argparse.Namespace) -> int:
 
 def _cmd_fetch_locked(args: argparse.Namespace, cfg: LustroConfig) -> int:
     state = load_state(cfg.state_path)
-    from lustro.fetcher import archive_article, fetch_rss, fetch_web, fetch_x_account
+    from lustro.fetcher import archive_article, fetch_rss, fetch_web, fetch_x_account, fetch_x_bookmarks
     from lustro.log import (
         _title_prefix,
         append_to_log,
@@ -86,7 +86,9 @@ def _cmd_fetch_locked(args: argparse.Namespace, cfg: LustroConfig) -> int:
         if not should_fetch(state, name, cadence, now=now):
             continue
         print(f"Fetching: {name}...", file=sys.stderr)
-        if "rss" in source:
+        if source.get("bookmarks"):
+            articles = fetch_x_bookmarks(since_date, bird_path=cfg.resolve_bird())
+        elif "rss" in source:
             articles = fetch_rss(source["rss"], since_date)
             if articles is None and "url" in source:
                 print(f"  Falling back to web: {source['url']}", file=sys.stderr)
@@ -146,9 +148,10 @@ def cmd_check(_args: argparse.Namespace) -> int:
     state = load_state(cfg.state_path)
     from lustro.fetcher import check_sources
 
-    web_sources = [s for s in cfg.sources if "handle" not in s]
+    web_sources = [s for s in cfg.sources if "handle" not in s and not s.get("bookmarks")]
     x_accounts = [s for s in cfg.sources if "handle" in s]
-    check_sources(web_sources, x_accounts, state, bird_path=cfg.resolve_bird())
+    x_bookmarks = [s for s in cfg.sources if s.get("bookmarks")]
+    check_sources(web_sources, x_accounts, state, bird_path=cfg.resolve_bird(), x_bookmarks=x_bookmarks)
     return 0
 
 
@@ -250,6 +253,23 @@ def cmd_sources(args: argparse.Namespace) -> int:
                     "x",
                     tier,
                     str(account.get("cadence", "-")),
+                )
+            )
+
+    x_bookmarks = cfg.sources_data.get("x_bookmarks", [])
+    if isinstance(x_bookmarks, list):
+        for bm in x_bookmarks:
+            if not isinstance(bm, dict):
+                continue
+            tier = int(bm.get("tier", 2))
+            if args.tier is not None and tier != args.tier:
+                continue
+            rows.append(
+                (
+                    str(bm.get("name", "X Bookmarks")),
+                    "bkmk",
+                    tier,
+                    str(bm.get("cadence", "-")),
                 )
             )
 

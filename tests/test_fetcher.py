@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from lustro.fetcher import archive_article, fetch_rss, fetch_web, fetch_x_account
+from lustro.fetcher import archive_article, fetch_rss, fetch_web, fetch_x_account, fetch_x_bookmarks
 
 
 class Entry(dict):
@@ -125,6 +125,36 @@ def test_fetch_x_account(monkeypatch):
     assert len(articles) == 1
     assert articles[0]["date"] == "2026-02-24"
     assert articles[0]["link"] == "https://x.com/alice/status/222"
+
+
+def test_fetch_x_bookmarks(monkeypatch):
+    monkeypatch.setattr("lustro.fetcher.shutil.which", lambda _name: "/usr/local/bin/bird")
+
+    tweets = [
+        {
+            "id": "111",
+            "createdAt": "Fri Feb 20 23:18:59 +0000 2026",
+            "text": "old bookmarked tweet that should be filtered out",
+            "author": {"username": "alice"},
+        },
+        {
+            "id": "333",
+            "createdAt": "Wed Feb 25 14:00:00 +0000 2026",
+            "text": "A bookmarked tweet about AI agents and their production deployment patterns.",
+            "author": {"username": "bob"},
+        },
+    ]
+
+    def fake_run(*_args, **_kwargs):
+        return SimpleNamespace(returncode=0, stdout=json.dumps(tweets), stderr="")
+
+    monkeypatch.setattr("lustro.fetcher.subprocess.run", fake_run)
+
+    articles = fetch_x_bookmarks("2026-02-23")
+
+    assert len(articles) == 1
+    assert articles[0]["date"] == "2026-02-25"
+    assert articles[0]["link"] == "https://x.com/bob/status/333"
 
 
 def test_check_sources_zeros(monkeypatch, capsys):
