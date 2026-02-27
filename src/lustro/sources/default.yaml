@@ -68,5 +68,5 @@ web_sources:
   - name: 机器之心
     tier: 2
     cadence: daily
-    rss: http://localhost:8001/feed/3073282833.xml?k=werss2026
+    rss: http://localhost:8001/feed/3073282833.xml?k=${WECHAT2RSS_TOKEN}
     url: https://www.jiqizhixin.com/

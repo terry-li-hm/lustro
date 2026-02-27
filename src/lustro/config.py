@@ -22,11 +22,17 @@ def _xdg_base(env_name: str, fallback_suffix: str) -> Path:
     return _expand_path(os.getenv(env_name, str(default)))
 
 
+def _expand_env_vars(text: str) -> str:
+    """Expand ${VAR} references in text using environment variables."""
+    return os.path.expandvars(text)
+
+
 def _load_yaml(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     with path.open("r", encoding="utf-8") as fh:
-        data = yaml.safe_load(fh) or {}
+        raw = fh.read()
+    data = yaml.safe_load(_expand_env_vars(raw)) or {}
     if not isinstance(data, dict):
         return {}
     return data
