@@ -224,7 +224,7 @@ def fetch_x_bookmarks(
             tweet_id = tweet.get("id", "")
             username = tweet.get("author", {}).get("username", "")
             link = f"https://x.com/{username}/status/{tweet_id}" if tweet_id and username else ""
-            articles.append({"title": title, "date": date_str, "summary": "", "link": link})
+            articles.append({"title": title, "date": date_str, "summary": "", "link": link, "_tweet_id": tweet_id})
             if len(articles) >= max_items:
                 break
         return articles
@@ -234,6 +234,24 @@ def fetch_x_bookmarks(
     except Exception as exc:
         print(f"  bird bookmarks error: {exc}", file=sys.stderr)
         return []
+
+
+def unbookmark_tweets(tweet_ids: list[str], bird_path: str | None = None) -> None:
+    if not tweet_ids:
+        return
+    bird_cli = bird_path or shutil.which("bird")
+    if bird_cli is None:
+        return
+    try:
+        subprocess.run(
+            [bird_cli, "unbookmark", *tweet_ids],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        print(f"  Unbookmarked {len(tweet_ids)} tweets", file=sys.stderr)
+    except Exception as exc:
+        print(f"  Unbookmark error: {exc}", file=sys.stderr)
 
 
 def _slug(text: str) -> str:

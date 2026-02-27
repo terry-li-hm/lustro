@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from lustro.fetcher import archive_article, fetch_rss, fetch_web, fetch_x_account, fetch_x_bookmarks
+from lustro.fetcher import archive_article, fetch_rss, fetch_web, fetch_x_account, fetch_x_bookmarks, unbookmark_tweets
 
 
 class Entry(dict):
@@ -155,6 +155,24 @@ def test_fetch_x_bookmarks(monkeypatch):
     assert len(articles) == 1
     assert articles[0]["date"] == "2026-02-25"
     assert articles[0]["link"] == "https://x.com/bob/status/333"
+    assert articles[0]["_tweet_id"] == "333"
+
+
+def test_unbookmark_tweets(monkeypatch):
+    monkeypatch.setattr("lustro.fetcher.shutil.which", lambda _name: "/usr/local/bin/bird")
+
+    calls = []
+
+    def fake_run(*args, **kwargs):
+        calls.append(args[0])
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("lustro.fetcher.subprocess.run", fake_run)
+
+    unbookmark_tweets(["111", "222"])
+
+    assert len(calls) == 1
+    assert calls[0] == ["/usr/local/bin/bird", "unbookmark", "111", "222"]
 
 
 def test_check_sources_zeros(monkeypatch, capsys):

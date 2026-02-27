@@ -60,7 +60,7 @@ def cmd_fetch(args: argparse.Namespace) -> int:
 
 def _cmd_fetch_locked(args: argparse.Namespace, cfg: LustroConfig) -> int:
     state = load_state(cfg.state_path)
-    from lustro.fetcher import archive_article, fetch_rss, fetch_web, fetch_x_account, fetch_x_bookmarks
+    from lustro.fetcher import archive_article, fetch_rss, fetch_web, fetch_x_account, fetch_x_bookmarks, unbookmark_tweets
     from lustro.log import (
         _title_prefix,
         append_to_log,
@@ -78,6 +78,7 @@ def _cmd_fetch_locked(args: argparse.Namespace, cfg: LustroConfig) -> int:
     title_prefixes = load_title_prefixes(cfg.log_path)
     results: dict[str, list[dict[str, str]]] = {}
     archived_count = 0
+    bookmark_ids_to_clear: list[str] = []
 
     for source in cfg.sources:
         name = source["name"]
@@ -115,6 +116,12 @@ def _cmd_fetch_locked(args: argparse.Namespace, cfg: LustroConfig) -> int:
                     archive_article(article, name, tier, cfg.article_cache_dir, now)
                     archived_count += 1
 
+        if source.get("bookmarks"):
+            for article in new_articles:
+                tid = article.pop("_tweet_id", "")
+                if tid:
+                    bookmark_ids_to_clear.append(tid)
+
         if new_articles:
             results[name] = new_articles
             state[name] = now.isoformat()
@@ -140,6 +147,8 @@ def _cmd_fetch_locked(args: argparse.Namespace, cfg: LustroConfig) -> int:
     append_to_log(cfg.log_path, md)
     total = sum(len(v) for v in results.values())
     print(f"Logged {total} new articles.", file=sys.stderr)
+    if bookmark_ids_to_clear:
+        unbookmark_tweets(bookmark_ids_to_clear, bird_path=cfg.resolve_bird())
     return 0
 
 
