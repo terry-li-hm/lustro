@@ -58,3 +58,15 @@ web_sources:
     cadence: weekly
     rss: https://github.blog/engineering/feed/
     url: https://github.blog/engineering/
+
+  - name: InfoQ 中文 AI&大模型
+    tier: 2
+    cadence: daily
+    rss: https://rsshub.rssforever.com/infoq/topic/AI
+    url: https://www.infoq.cn/topic/AI
+
+  - name: 机器之心
+    tier: 2
+    cadence: daily
+    rss: http://localhost:8001/feed/3073282833.xml?k=werss2026
+    url: https://www.jiqizhixin.com/
