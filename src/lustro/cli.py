@@ -1,13 +1,30 @@
 from __future__ import annotations
 
-import argparse
 import importlib.metadata
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Optional
+
+import typer
 
 from lustro.config import LustroConfig, default_sources_text, load_config
 from lustro.state import load_state, lockfile
+
+app = typer.Typer(help="Lustro — AI news aggregator")
+
+
+def version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"lustro {_get_version()}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main_callback(
+    version: bool = typer.Option(False, "--version", callback=version_callback, is_eager=True),
+) -> None:
+    pass
 
 
 def _get_version() -> str:
@@ -52,13 +69,16 @@ def _get_last_scan_date(state: dict[str, str]) -> str:
     return (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
 
 
-def cmd_fetch(args: argparse.Namespace) -> int:
+@app.command()
+def fetch(
+    no_archive: bool = typer.Option(False, "--no-archive", help="Skip archiving full article text"),
+) -> None:
     cfg = load_config()
     with lockfile(cfg.state_path):
-        return _cmd_fetch_locked(args, cfg)
+        _fetch_locked(cfg, no_archive)
 
 
-def _cmd_fetch_locked(args: argparse.Namespace, cfg: LustroConfig) -> int:
+def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
     state = load_state(cfg.state_path)
     from lustro.fetcher import archive_article, fetch_rss, fetch_web, fetch_x_account, fetch_x_bookmarks, unbookmark_tweets
     from lustro.log import (
@@ -86,7 +106,7 @@ def _cmd_fetch_locked(args: argparse.Namespace, cfg: LustroConfig) -> int:
         tier = source.get("tier", 2)
         if not should_fetch(state, name, cadence, now=now):
             continue
-        print(f"Fetching: {name}...", file=sys.stderr)
+        typer.echo(f"Fetching: {name}...", err=True)
         if source.get("bookmarks"):
             articles = fetch_x_bookmarks(since_date, bird_path=cfg.resolve_bird())
         elif "rss" in source:
@@ -103,7 +123,7 @@ def _cmd_fetch_locked(args: argparse.Namespace, cfg: LustroConfig) -> int:
                 ),
             )
             if articles is None and "url" in source:
-                print(f"  Falling back to web: {source['url']}", file=sys.stderr)
+                typer.echo(f"  Falling back to web: {source['url']}", err=True)
                 articles = fetch_web(source["url"])
             articles = articles or []
         elif "handle" in source:
@@ -121,7 +141,7 @@ def _cmd_fetch_locked(args: argparse.Namespace, cfg: LustroConfig) -> int:
             new_articles.append(article)
             title_prefixes.add(prefix)
 
-        if not args.no_archive:
+        if not no_archive:
             for article in new_articles:
                 if article.get("link") and tier == 1:
                     archive_article(article, name, tier, cfg.article_cache_dir, now)
@@ -144,26 +164,27 @@ def _cmd_fetch_locked(args: argparse.Namespace, cfg: LustroConfig) -> int:
             zeros = int(state.get(z_key, 0)) + 1
             state[z_key] = str(zeros)
             if zeros >= 5:
-                print(
+                typer.echo(
                     f"  Warning: {name} has {zeros} consecutive zero-article fetches",
-                    file=sys.stderr,
+                    err=True,
                 )
 
     save_state(cfg.state_path, state)
     if not results:
-        print("No new articles found.", file=sys.stderr)
-        return 0
+        typer.echo("No new articles found.", err=True)
+        raise typer.Exit(code=0)
     today = now.strftime("%Y-%m-%d")
     md = format_markdown(results, today)
     append_to_log(cfg.log_path, md)
     total = sum(len(v) for v in results.values())
-    print(f"Logged {total} new articles.", file=sys.stderr)
+    typer.echo(f"Logged {total} new articles.", err=True)
     if bookmark_ids_to_clear:
         unbookmark_tweets(bookmark_ids_to_clear, bird_path=cfg.resolve_bird())
-    return 0
+    raise typer.Exit(code=0)
 
 
-def cmd_check(_args: argparse.Namespace) -> int:
+@app.command()
+def check() -> None:
     cfg = load_config()
     state = load_state(cfg.state_path)
     from lustro.fetcher import check_sources
@@ -172,72 +193,92 @@ def cmd_check(_args: argparse.Namespace) -> int:
     x_accounts = [s for s in cfg.sources if "handle" in s]
     x_bookmarks = [s for s in cfg.sources if s.get("bookmarks")]
     check_sources(web_sources, x_accounts, state, bird_path=cfg.resolve_bird(), x_bookmarks=x_bookmarks)
-    return 0
+    raise typer.Exit(code=0)
 
 
-def cmd_digest(args: argparse.Namespace) -> int:
+@app.command()
+def digest(
+    month: Optional[str] = typer.Option(None, "--month", help="Target month YYYY-MM"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show themes only"),
+    themes: Optional[int] = typer.Option(None, "--themes", help="Max themes"),
+    model: Optional[str] = typer.Option(None, "--model", help="Model ID"),
+) -> None:
     cfg = load_config()
     from lustro.digest import run_digest
 
     try:
-        themes, output_path = run_digest(
+        themes_result, output_path = run_digest(
             cfg=cfg,
-            month=args.month,
-            dry_run=bool(args.dry_run),
-            themes=args.themes,
-            model=args.model,
+            month=month,
+            dry_run=dry_run,
+            themes=themes,
+            model=model,
         )
     except RuntimeError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1)
 
-    print(f"Found {len(themes)} themes.", file=sys.stderr)
-    for i, theme in enumerate(themes, 1):
+    typer.echo(f"Found {len(themes_result)} themes.", err=True)
+    for i, theme in enumerate(themes_result, 1):
         name = theme.get("theme", f"Theme {i}")
         count = len(theme.get("article_indices", []))
-        print(f"{i}. {name} ({count} articles)", file=sys.stderr)
+        typer.echo(f"{i}. {name} ({count} articles)", err=True)
 
-    if args.dry_run:
+    if dry_run:
         import json
 
-        print(json.dumps(themes, indent=2, ensure_ascii=False))
-        return 0
+        typer.echo(json.dumps(themes_result, indent=2, ensure_ascii=False))
+        raise typer.Exit(code=0)
 
     if output_path is not None:
-        print(f"Digest written: {output_path}", file=sys.stderr)
-    return 0
+        typer.echo(f"Digest written: {output_path}", err=True)
+    raise typer.Exit(code=0)
 
 
-def cmd_log(args: argparse.Namespace) -> int:
+@app.command()
+def log(
+    lines: int = typer.Option(50, "--lines", "-n", help="Number of lines"),
+) -> None:
     cfg = load_config()
     if not cfg.log_path.exists():
-        print(f"Not found: {cfg.log_path}")
-        return 1
-    lines = cfg.log_path.read_text(encoding="utf-8").splitlines()
-    while lines and not lines[-1].strip():
-        lines.pop()
-    n = max(0, args.lines) if args.lines else 0
-    if n and n < len(lines):
-        lines = lines[-n:]
-    print("\n".join(lines))
-    return 0
+        typer.echo(f"Not found: {cfg.log_path}")
+        raise typer.Exit(code=1)
+    log_lines = cfg.log_path.read_text(encoding="utf-8").splitlines()
+    while log_lines and not log_lines[-1].strip():
+        log_lines.pop()
+    n = max(0, lines) if lines else 0
+    if n and n < len(log_lines):
+        log_lines = log_lines[-n:]
+    typer.echo("\n".join(log_lines))
+    raise typer.Exit(code=0)
 
 
-def cmd_breaking(args: argparse.Namespace) -> int:
+@app.command()
+def breaking(
+    dry_run: bool = typer.Option(False, "--dry-run"),
+) -> None:
     cfg = load_config()
     from lustro.breaking import run_breaking
 
-    return run_breaking(cfg=cfg, dry_run=bool(args.dry_run))
+    result = run_breaking(cfg=cfg, dry_run=dry_run)
+    raise typer.Exit(code=result)
 
 
-def cmd_discover(args: argparse.Namespace) -> int:
+@app.command()
+def discover(
+    count: Optional[int] = typer.Option(None, "--count", help="Number of tweets to scan"),
+) -> None:
     cfg = load_config()
     from lustro.discover import run_discover
 
-    return run_discover(cfg=cfg, count=args.count, bird_path=cfg.resolve_bird())
+    result = run_discover(cfg=cfg, count=count, bird_path=cfg.resolve_bird())
+    raise typer.Exit(code=result)
 
 
-def cmd_sources(args: argparse.Namespace) -> int:
+@app.command()
+def sources(
+    tier: Optional[int] = typer.Option(None, "--tier", help="Filter sources by tier"),
+) -> None:
     cfg = load_config()
     rows: list[tuple[str, str, int, str]] = []
 
@@ -246,15 +287,15 @@ def cmd_sources(args: argparse.Namespace) -> int:
         for source in web_sources:
             if not isinstance(source, dict):
                 continue
-            tier = int(source.get("tier", 2))
-            if args.tier is not None and tier != args.tier:
+            source_tier = int(source.get("tier", 2))
+            if tier is not None and source_tier != tier:
                 continue
             source_type = "rss" if source.get("rss") else "web"
             rows.append(
                 (
                     str(source.get("name", "")),
                     source_type,
-                    tier,
+                    source_tier,
                     str(source.get("cadence", "-")),
                 )
             )
@@ -264,14 +305,14 @@ def cmd_sources(args: argparse.Namespace) -> int:
         for account in x_accounts:
             if not isinstance(account, dict):
                 continue
-            tier = int(account.get("tier", 2))
-            if args.tier is not None and tier != args.tier:
+            account_tier = int(account.get("tier", 2))
+            if tier is not None and account_tier != tier:
                 continue
             rows.append(
                 (
                     str(account.get("name") or account.get("handle", "")),
                     "x",
-                    tier,
+                    account_tier,
                     str(account.get("cadence", "-")),
                 )
             )
@@ -281,66 +322,68 @@ def cmd_sources(args: argparse.Namespace) -> int:
         for bm in x_bookmarks:
             if not isinstance(bm, dict):
                 continue
-            tier = int(bm.get("tier", 2))
-            if args.tier is not None and tier != args.tier:
+            bm_tier = int(bm.get("tier", 2))
+            if tier is not None and bm_tier != tier:
                 continue
             rows.append(
                 (
                     str(bm.get("name", "X Bookmarks")),
                     "bkmk",
-                    tier,
+                    bm_tier,
                     str(bm.get("cadence", "-")),
                 )
             )
 
     if not rows:
-        print("No sources configured.")
-        return 0
+        typer.echo("No sources configured.")
+        raise typer.Exit(code=0)
 
-    print(f"{'Name':<36} {'Type':<4} {'Tier':>4} {'Cadence':<12}")
-    print("-" * 64)
-    for name, source_type, tier, cadence in rows:
-        print(f"{name[:36]:<36} {source_type:<4} {tier:>4} {cadence:<12}")
-    print(f"\nTotal: {len(rows)} sources")
-    return 0
+    typer.echo(f"{'Name':<36} {'Type':<4} {'Tier':>4} {'Cadence':<12}")
+    typer.echo("-" * 64)
+    for name, source_type, source_tier, cadence in rows:
+        typer.echo(f"{name[:36]:<36} {source_type:<4} {source_tier:>4} {cadence:<12}")
+    typer.echo(f"\nTotal: {len(rows)} sources")
+    raise typer.Exit(code=0)
 
 
-def cmd_status(_args: argparse.Namespace) -> int:
+@app.command()
+def status() -> None:
     cfg = load_config()
     now = datetime.now().astimezone()
 
-    print(f"Lustro Status  ({now.strftime('%Y-%m-%d %H:%M %Z')})")
-    print("=" * 44)
+    typer.echo(f"Lustro Status  ({now.strftime('%Y-%m-%d %H:%M %Z')})")
+    typer.echo("=" * 44)
 
-    print(f"\nConfig dir:    {cfg.config_dir}")
-    print(f"Sources file:  {_file_age(cfg.sources_path, now)}")
-    print(f"State file:    {_file_age(cfg.state_path, now)}")
-    print(f"News log:      {_file_age(cfg.log_path, now)}")
+    typer.echo(f"\nConfig dir:    {cfg.config_dir}")
+    typer.echo(f"Sources file:  {_file_age(cfg.sources_path, now)}")
+    typer.echo(f"State file:    {_file_age(cfg.state_path, now)}")
+    typer.echo(f"News log:      {_file_age(cfg.log_path, now)}")
 
     state = load_state(cfg.state_path)
     if state:
-        print(f"Sources:       {len(state)} tracked")
+        typer.echo(f"Sources:       {len(state)} tracked")
         latest = max(
             (dt for ts in state.values() if isinstance(ts, str) for dt in [_parse_aware(ts)] if dt),
             default=None,
         )
         if latest is not None:
-            print(f"Last fetch:    {latest.strftime('%Y-%m-%d %H:%M')}")
+            typer.echo(f"Last fetch:    {latest.strftime('%Y-%m-%d %H:%M')}")
 
     if cfg.article_cache_dir.exists():
         files = list(cfg.article_cache_dir.glob("*.json"))
         size_kb = sum(f.stat().st_size for f in files) / 1024
-        print(f"Article cache: {len(files)} files, {size_kb:.0f} KB")
+        typer.echo(f"Article cache: {len(files)} files, {size_kb:.0f} KB")
     else:
-        print(f"Article cache: missing ({cfg.article_cache_dir})")
+        typer.echo(f"Article cache: missing ({cfg.article_cache_dir})")
 
     if not cfg.sources_path.exists():
-        print("\nRun 'lustro init' to set up configuration.", file=sys.stderr)
-        return 1
-    return 0
+        typer.echo("\nRun 'lustro init' to set up configuration.", err=True)
+        raise typer.Exit(code=1)
+    raise typer.Exit(code=0)
 
 
-def cmd_init(_args: argparse.Namespace) -> int:
+@app.command()
+def init() -> None:
     cfg = load_config()
     cfg.config_dir.mkdir(parents=True, exist_ok=True)
     cfg.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -353,77 +396,21 @@ def cmd_init(_args: argparse.Namespace) -> int:
     else:
         created = "exists"
 
-    print(f"Config directory: {cfg.config_dir}")
-    print(f"Sources file: {cfg.sources_path} ({created})")
-    print(f"Cache directory: {cfg.cache_dir}")
-    print(f"Data directory: {cfg.data_dir}")
-    return 0
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="lustro",
-        description="Survey and illuminate the AI/tech landscape",
-        epilog=(
-            'Shell completion: eval "$(register-python-argcomplete lustro)" (requires argcomplete)'
-        ),
-    )
-    parser.add_argument(
-        "--version",
-        action="version",
-        version=f"%(prog)s {_get_version()}",
-    )
-    sub = parser.add_subparsers(dest="command")
-
-    p_fetch = sub.add_parser("fetch", help="Run daily fetch")
-    p_fetch.add_argument(
-        "--no-archive", action="store_true", help="Skip archiving full article text"
-    )
-
-    sub.add_parser("check", help="Health-check configured sources")
-
-    p_digest = sub.add_parser("digest", help="Monthly thematic digest")
-    p_digest.add_argument("--month", help="Target month YYYY-MM")
-    p_digest.add_argument("--dry-run", action="store_true", help="Show themes only")
-    p_digest.add_argument("--themes", type=int, help="Max themes")
-    p_digest.add_argument("--model", help="Model ID")
-
-    p_log = sub.add_parser("log", help="Tail the news log")
-    p_log.add_argument("--lines", "-n", type=int, default=50, help="Number of lines")
-
-    p_breaking = sub.add_parser("breaking", help="Check for breaking AI news")
-    p_breaking.add_argument("--dry-run", action="store_true")
-
-    p_discover = sub.add_parser("discover", help="Find new X handles from For You feed")
-    p_discover.add_argument("--count", type=int, help="Number of tweets to scan")
-
-    p_sources = sub.add_parser("sources", help="List configured sources")
-    p_sources.add_argument("--tier", type=int, help="Filter sources by tier")
-
-    sub.add_parser("status", help="Show paths and state ages")
-    sub.add_parser("init", help="Create config/cache/data dirs and starter sources")
-
-    return parser
+    typer.echo(f"Config directory: {cfg.config_dir}")
+    typer.echo(f"Sources file: {cfg.sources_path} ({created})")
+    typer.echo(f"Cache directory: {cfg.cache_dir}")
+    typer.echo(f"Data directory: {cfg.data_dir}")
+    raise typer.Exit(code=0)
 
 
 def main() -> int:
-    parser = build_parser()
-    args = parser.parse_args()
-    if args.command is None:
-        args = parser.parse_args(["fetch"])
-
-    dispatch = {
-        "fetch": cmd_fetch,
-        "check": cmd_check,
-        "digest": cmd_digest,
-        "log": cmd_log,
-        "breaking": cmd_breaking,
-        "discover": cmd_discover,
-        "sources": cmd_sources,
-        "status": cmd_status,
-        "init": cmd_init,
-    }
-    return dispatch[args.command](args)
+    if len(sys.argv) == 1:
+        sys.argv.append("fetch")
+    try:
+        app()
+        return 0
+    except typer.Exit as e:
+        return e.exit_code if e.exit_code is not None else 0
 
 
 if __name__ == "__main__":
