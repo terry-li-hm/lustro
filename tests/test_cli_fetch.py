@@ -42,7 +42,7 @@ def mock_cfg(tmp_path):
 def test_fetch_fallback_and_zeros(monkeypatch, mock_cfg, capsys):
     # Mock fetch functions
     # 1. First call: fetch_rss returns None, fetch_web returns results
-    monkeypatch.setattr("lustro.fetcher.fetch_rss", lambda _url, _since: None)
+    monkeypatch.setattr("lustro.fetcher.fetch_rss", lambda _url, _since, **kwargs: None)
     monkeypatch.setattr("lustro.fetcher.fetch_web", lambda _url: [{"title": "Web Article", "link": "https://live.web/1"}])
     
     # Mock other needed functions

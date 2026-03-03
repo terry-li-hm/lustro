@@ -90,7 +90,11 @@ def _cmd_fetch_locked(args: argparse.Namespace, cfg: LustroConfig) -> int:
         if source.get("bookmarks"):
             articles = fetch_x_bookmarks(since_date, bird_path=cfg.resolve_bird())
         elif "rss" in source:
-            articles = fetch_rss(source["rss"], since_date)
+            articles = fetch_rss(
+                source["rss"],
+                since_date,
+                full_fetch=bool(source.get("full_fetch", False)),
+            )
             if articles is None and "url" in source:
                 print(f"  Falling back to web: {source['url']}", file=sys.stderr)
                 articles = fetch_web(source["url"])

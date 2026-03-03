@@ -84,7 +84,12 @@ def _extract_summary(entry: Any) -> str:
     return first[:120]
 
 
-def fetch_rss(url: str, since_date: str, max_items: int = 5) -> list[dict[str, str]] | None:
+def fetch_rss(
+    url: str,
+    since_date: str,
+    max_items: int = 5,
+    full_fetch: bool = False,
+) -> list[dict[str, str]] | None:
     try:
         feed = feedparser.parse(url, request_headers=HEADERS)
 
@@ -109,8 +114,21 @@ def fetch_rss(url: str, since_date: str, max_items: int = 5) -> list[dict[str, s
             date_str = _parse_feed_date(entry)
             if date_str and date_str <= since_date:
                 continue
-            summary = _extract_summary(entry)
             link = str(_entry_get(entry, "link", ""))
+            summary = _extract_summary(entry)
+
+            if full_fetch and link and _is_safe_url(link):
+                try:
+                    downloaded = trafilatura.fetch_url(link)
+                    extracted = trafilatura.extract(downloaded) if downloaded else None
+                    if extracted:
+                        summary = extracted.strip().replace("\n", " ")[:500]
+                        print(f"  full_fetch: {link} [{len(summary)} chars]", file=sys.stderr)
+                    else:
+                        print(f"  full_fetch: {link} [failed]", file=sys.stderr)
+                except Exception:
+                    print(f"  full_fetch: {link} [failed]", file=sys.stderr)
+
             articles.append({"title": title, "date": date_str, "summary": summary, "link": link})
             if len(articles) >= max_items:
                 break
