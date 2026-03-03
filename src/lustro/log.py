@@ -101,7 +101,7 @@ def format_markdown(results: dict[str, list[dict[str, str]]], date_str: str) -> 
 
 
 def append_to_log(log_path: Path, markdown: str) -> None:
-    marker = "<!-- News entries below -->"
+    marker = "<!-- News entries below, added by /lustro -->"
     if not log_path.exists():
         _atomic_write(log_path, markdown)
         return
