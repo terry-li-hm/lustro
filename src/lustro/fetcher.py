@@ -151,6 +151,16 @@ def fetch_rss(
             link = str(_entry_get(entry, "link", ""))
             summary = _extract_summary(entry)
 
+            # Extract full article text from RSS content field if available
+            # (e.g. Wechat2RSS proxies full article HTML in content[0].value)
+            rss_text = ""
+            content_list = getattr(entry, "content", None) or _entry_get(entry, "content", [])
+            if content_list:
+                raw = content_list[0]
+                html = raw.get("value", "") if hasattr(raw, "get") else getattr(raw, "value", "")
+                if html:
+                    rss_text = BeautifulSoup(html, "html.parser").get_text(separator=" ").strip()
+
             if stealth_fetch and link and _is_safe_url(link):
                 try:
                     text = fetch_stealth_url(
@@ -176,7 +186,10 @@ def fetch_rss(
                 except Exception:
                     print(f"  full_fetch: {link} [failed]", file=sys.stderr)
 
-            articles.append({"title": title, "date": date_str, "summary": summary, "link": link})
+            article: dict[str, str] = {"title": title, "date": date_str, "summary": summary, "link": link}
+            if rss_text:
+                article["text"] = rss_text
+            articles.append(article)
             if len(articles) >= max_items:
                 break
         return articles
@@ -356,13 +369,14 @@ def archive_article(
         print(f"  Blocked (SSRF): {link}", file=sys.stderr)
         return
 
-    text = None
-    try:
-        downloaded = trafilatura.fetch_url(link)
-        if downloaded:
-            text = trafilatura.extract(downloaded)
-    except Exception as exc:
-        print(f"  Archive error {link}: {exc}", file=sys.stderr)
+    text = article.get("text") or None
+    if not text:
+        try:
+            downloaded = trafilatura.fetch_url(link)
+            if downloaded:
+                text = trafilatura.extract(downloaded)
+        except Exception as exc:
+            print(f"  Archive error {link}: {exc}", file=sys.stderr)
 
     record = {
         "title": title,
