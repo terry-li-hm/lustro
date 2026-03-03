@@ -16,6 +16,7 @@ dependencies = [
   "trafilatura>=1.6",
   "pyyaml>=6",
   "beautifulsoup4>=4.12",
+  "nodriver>=0.35",
 ]
 
 [project.urls]

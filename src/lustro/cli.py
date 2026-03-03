@@ -94,6 +94,13 @@ def _cmd_fetch_locked(args: argparse.Namespace, cfg: LustroConfig) -> int:
                 source["rss"],
                 since_date,
                 full_fetch=bool(source.get("full_fetch", False)),
+                stealth_fetch=bool(source.get("stealth_fetch", False)),
+                profile_dir=Path(
+                    cfg.config_data.get(
+                        "nodriver_profile_dir",
+                        Path.home() / ".config" / "lustro" / "nodriver-profile",
+                    )
+                ),
             )
             if articles is None and "url" in source:
                 print(f"  Falling back to web: {source['url']}", file=sys.stderr)

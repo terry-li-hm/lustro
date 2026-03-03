@@ -84,11 +84,45 @@ def _extract_summary(entry: Any) -> str:
     return first[:120]
 
 
+def fetch_stealth_url(url: str, profile_dir: Path) -> str | None:
+    """Fetch URL using nodriver (stealth Chrome) to bypass Cloudflare.
+
+    Returns extracted text or None on failure.
+    profile_dir: persistent Chrome user-data-dir so logins persist across runs.
+    """
+    try:
+        import asyncio
+        import nodriver as uc
+
+        async def _fetch() -> str:
+            browser = await uc.start(
+                headless=True,
+                user_data_dir=str(profile_dir),
+            )
+            try:
+                page = await browser.get(url)
+                await asyncio.sleep(4)
+                text = await page.evaluate("document.body.innerText")
+                return str(text) if text is not None else ""
+            finally:
+                browser.stop()
+
+        return asyncio.run(_fetch())
+    except ImportError:
+        print("  nodriver not installed — skipping stealth fetch", file=sys.stderr)
+        return None
+    except Exception as exc:
+        print(f"  stealth_fetch error {url}: {exc}", file=sys.stderr)
+        return None
+
+
 def fetch_rss(
     url: str,
     since_date: str,
     max_items: int = 5,
     full_fetch: bool = False,
+    stealth_fetch: bool = False,
+    profile_dir: Path | None = None,
 ) -> list[dict[str, str]] | None:
     try:
         feed = feedparser.parse(url, request_headers=HEADERS)
@@ -117,12 +151,25 @@ def fetch_rss(
             link = str(_entry_get(entry, "link", ""))
             summary = _extract_summary(entry)
 
-            if full_fetch and link and _is_safe_url(link):
+            if stealth_fetch and link and _is_safe_url(link):
+                try:
+                    text = fetch_stealth_url(
+                        link,
+                        profile_dir or Path.home() / ".config" / "lustro" / "nodriver-profile",
+                    )
+                    if text:
+                        summary = text.strip().replace("\n", " ")
+                        print(f"  stealth_fetch: {link} [{len(summary)} chars]", file=sys.stderr)
+                    else:
+                        print(f"  stealth_fetch: {link} [failed]", file=sys.stderr)
+                except Exception:
+                    print(f"  stealth_fetch: {link} [failed]", file=sys.stderr)
+            elif full_fetch and link and _is_safe_url(link):
                 try:
                     downloaded = trafilatura.fetch_url(link)
                     extracted = trafilatura.extract(downloaded) if downloaded else None
                     if extracted:
-                        summary = extracted.strip().replace("\n", " ")[:500]
+                        summary = extracted.strip().replace("\n", " ")
                         print(f"  full_fetch: {link} [{len(summary)} chars]", file=sys.stderr)
                     else:
                         print(f"  full_fetch: {link} [failed]", file=sys.stderr)
