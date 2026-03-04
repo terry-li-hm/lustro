@@ -327,7 +327,9 @@ def fetch_web(
 
         if selector:
             for tag in soup.select(selector)[:max_items]:
-                title = tag.get_text().strip()
+                # Prefer heading child over full card text (avoids category label noise)
+                heading = tag.find(["h2", "h3", "h4"]) if tag.name == "a" else None
+                title = (heading.get_text().strip() if heading else tag.get_text().strip())
                 if title and len(title) > 10:
                     link = tag.get("href", "") if tag.name == "a" else ""
                     if not link:

@@ -69,6 +69,16 @@ def _get_last_scan_date(state: dict[str, str]) -> str:
     return (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
 
 
+def _source_since_date(state: dict[str, str], name: str, fallback: str) -> str:
+    """Per-source since_date: use the source's own last-scan timestamp if available."""
+    val = state.get(name)
+    if val:
+        dt = _parse_aware(val)
+        if dt is not None:
+            return dt.strftime("%Y-%m-%d")
+    return fallback
+
+
 @app.command()
 def fetch(
     no_archive: bool = typer.Option(False, "--no-archive", help="Skip archiving full article text"),
@@ -94,7 +104,7 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
     now = datetime.now(timezone.utc)
     rotate_log(cfg.log_path, cfg.data_dir, cfg.config_data.get("max_log_lines", 500), now)
 
-    since_date = _get_last_scan_date(state)
+    global_since_date = _get_last_scan_date(state)
     title_prefixes = load_title_prefixes(cfg.log_path)
     results: dict[str, list[dict[str, str]]] = {}
     failed_sources: list[str] = []
@@ -115,6 +125,7 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
             continue
         typer.echo(f"Fetching: {name}...", err=True)
         fetch_failed = False
+        since_date = _source_since_date(state, name, global_since_date)
         if source.get("bookmarks"):
             articles = fetch_x_bookmarks(since_date, bird_path=cfg.resolve_bird())
         elif "rss" in source:
