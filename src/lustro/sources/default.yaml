@@ -53,6 +53,18 @@ web_sources:
     # RSS dead (404) as of Feb 2026
     url: https://developers.openai.com/blog
 
+  - name: The Gradient
+    tier: 2
+    cadence: weekly
+    rss: https://thegradient.pub/rss/
+    url: https://thegradient.pub/
+
+  - name: MIT Technology Review AI
+    tier: 2
+    cadence: daily
+    rss: https://www.technologyreview.com/feed/
+    url: https://www.technologyreview.com/topic/artificial-intelligence/
+
   - name: Latent Space
     tier: 2
     cadence: weekly
@@ -94,6 +106,13 @@ web_sources:
     cadence: daily
     rss: https://rsshub.rssforever.com/infoq/topic/AI
     url: https://www.infoq.cn/topic/AI
+
+  - name: 量子位
+    tier: 2
+    cadence: daily
+    rss: https://rsshub.rssforever.com/qbitai
+    url: https://www.qbitai.com/
+    # Note: RSSHub route — verify if feeds go stale
 
   - name: 机器之心
     tier: 2
