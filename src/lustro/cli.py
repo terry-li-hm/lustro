@@ -80,7 +80,7 @@ def fetch(
 
 def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
     state = load_state(cfg.state_path)
-    from lustro.fetcher import archive_article, fetch_rss, fetch_web, fetch_x_account, fetch_x_bookmarks, unbookmark_tweets
+    from lustro.fetcher import archive_article, fetch_linkedin_company, fetch_rss, fetch_web, fetch_x_account, fetch_x_bookmarks, unbookmark_tweets
     from lustro.log import (
         _title_prefix,
         append_to_log,
@@ -140,6 +140,16 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
             articles = articles or []
         elif "handle" in source:
             articles = fetch_x_account(source["handle"], since_date, bird_path=cfg.resolve_bird())
+        elif "linkedin" in source:
+            articles = fetch_linkedin_company(
+                source["linkedin"],
+                since_date,
+                agent_browser_bin=cfg.config_data.get("agent_browser_bin", "agent-browser"),
+            )
+            if articles is None:
+                fetch_failed = True
+                failed_sources.append(f"{name} (linkedin error)")
+                articles = []
         else:
             articles = fetch_web(
                 source.get("url", ""),

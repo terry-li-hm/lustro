@@ -144,6 +144,81 @@ def fetch_stealth_html(url: str, profile_dir: Path) -> str | None:
         return None
 
 
+# JS to extract post body text from LinkedIn company posts page
+_LINKEDIN_JS = """
+(function() {
+  var arts = document.querySelectorAll('[data-urn]');
+  var result = Array.from(arts).map(function(a) {
+    var text = a.innerText;
+    var idx = text.indexOf('\\nFollow\\n');
+    if (idx < 0) { idx = text.indexOf('\\nFollow '); }
+    var content = idx >= 0 ? text.slice(idx + 8).trim() : '';
+    var lines = content.split('\\n');
+    var title = lines[0].slice(0, 140);
+    return {title: title, summary: lines.slice(1, 3).join(' ').slice(0, 200)};
+  }).filter(function(p) { return p.title && p.title.length > 15; });
+  return JSON.stringify(result);
+})()
+"""
+
+
+def fetch_linkedin_company(
+    slug: str,
+    since_date: str,
+    max_items: int = 5,
+    agent_browser_bin: str = "agent-browser",
+) -> list[dict[str, str]] | None:
+    """Fetch LinkedIn company posts via agent-browser (requires active session).
+
+    slug: LinkedIn company URL slug (e.g. 'the-hong-kong-institute-of-bankers')
+    Requires agent-browser daemon running with a logged-in LinkedIn session.
+    """
+    url = f"https://www.linkedin.com/company/{slug}/posts/?feedView=all"
+    try:
+        # Navigate to the page (agent-browser daemon must be running)
+        nav = subprocess.run(
+            [agent_browser_bin, "open", url],
+            capture_output=True, text=True, timeout=30,
+        )
+        if nav.returncode != 0:
+            print(f"  linkedin: open failed for {slug}: {nav.stderr[:80]}", file=sys.stderr)
+            return None
+
+        # Extract posts via JS eval
+        result = subprocess.run(
+            [agent_browser_bin, "eval", _LINKEDIN_JS],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode != 0:
+            print(f"  linkedin: eval failed for {slug}: {result.stderr[:80]}", file=sys.stderr)
+            return None
+
+        raw = result.stdout.strip()
+        if raw.startswith('"') and raw.endswith('"'):
+            raw = json.loads(raw)  # agent-browser wraps string results in quotes
+        posts = json.loads(raw) if isinstance(raw, str) else raw
+
+        articles: list[dict[str, str]] = []
+        for post in posts[:max_items]:
+            title = str(post.get("title", "")).strip()
+            if not title or len(title) < 15:
+                continue
+            articles.append({
+                "title": title,
+                "summary": str(post.get("summary", "")),
+                "date": "",
+                "link": url,
+            })
+        print(f"  linkedin: {slug} → {len(articles)} posts", file=sys.stderr)
+        return articles
+    except subprocess.TimeoutExpired:
+        print(f"  linkedin: timeout for {slug}", file=sys.stderr)
+        return None
+    except Exception as exc:
+        print(f"  linkedin: error for {slug}: {exc}", file=sys.stderr)
+        return None
+
+
 def fetch_rss(
     url: str,
     since_date: str,
