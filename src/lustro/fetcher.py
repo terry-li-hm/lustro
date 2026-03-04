@@ -280,7 +280,7 @@ def fetch_web(
         return articles
     except Exception as exc:
         print(f"  Web error {url}: {exc}", file=sys.stderr)
-        return []
+        return None
 
 
 def fetch_x_account(

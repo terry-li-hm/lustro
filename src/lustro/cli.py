@@ -97,8 +97,15 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
     since_date = _get_last_scan_date(state)
     title_prefixes = load_title_prefixes(cfg.log_path)
     results: dict[str, list[dict[str, str]]] = {}
+    failed_sources: list[str] = []
     archived_count = 0
     bookmark_ids_to_clear: list[str] = []
+    _nodriver_profile = Path(
+        cfg.config_data.get(
+            "nodriver_profile_dir",
+            Path.home() / ".config" / "lustro" / "nodriver-profile",
+        )
+    )
 
     for source in cfg.sources:
         name = source["name"]
@@ -107,6 +114,7 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
         if not should_fetch(state, name, cadence, now=now):
             continue
         typer.echo(f"Fetching: {name}...", err=True)
+        fetch_failed = False
         if source.get("bookmarks"):
             articles = fetch_x_bookmarks(since_date, bird_path=cfg.resolve_bird())
         elif "rss" in source:
@@ -115,26 +123,20 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
                 since_date,
                 full_fetch=bool(source.get("full_fetch", False)),
                 stealth_fetch=bool(source.get("stealth_fetch", False)),
-                profile_dir=Path(
-                    cfg.config_data.get(
-                        "nodriver_profile_dir",
-                        Path.home() / ".config" / "lustro" / "nodriver-profile",
-                    )
-                ),
+                profile_dir=_nodriver_profile,
             )
-            if articles is None and "url" in source:
-                typer.echo(f"  Falling back to web: {source['url']}", err=True)
-                articles = fetch_web(
-                    source["url"],
-                    selector=source.get("selector"),
-                    stealth=bool(source.get("stealth_web", False)),
-                    profile_dir=Path(
-                        cfg.config_data.get(
-                            "nodriver_profile_dir",
-                            Path.home() / ".config" / "lustro" / "nodriver-profile",
-                        )
-                    ),
-                )
+            if articles is None:
+                if "url" in source:
+                    typer.echo(f"  RSS dead, falling back to web: {source['url']}", err=True)
+                    articles = fetch_web(
+                        source["url"],
+                        selector=source.get("selector"),
+                        stealth=bool(source.get("stealth_web", False)),
+                        profile_dir=_nodriver_profile,
+                    )
+                if articles is None:
+                    fetch_failed = True
+                    failed_sources.append(f"{name} (RSS dead)")
             articles = articles or []
         elif "handle" in source:
             articles = fetch_x_account(source["handle"], since_date, bird_path=cfg.resolve_bird())
@@ -143,13 +145,16 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
                 source.get("url", ""),
                 selector=source.get("selector"),
                 stealth=bool(source.get("stealth_web", False)),
-                profile_dir=Path(
-                    cfg.config_data.get(
-                        "nodriver_profile_dir",
-                        Path.home() / ".config" / "lustro" / "nodriver-profile",
-                    )
-                ),
+                profile_dir=_nodriver_profile,
             )
+            if articles is None:
+                fetch_failed = True
+                failed_sources.append(f"{name} (web error)")
+                articles = []
+
+        if fetch_failed:
+            f_key = f"_fail:{name}"
+            state[f_key] = str(int(state.get(f_key, 0)) + 1)
 
         new_articles = []
         for article in articles:
@@ -190,6 +195,8 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
                 )
 
     save_state(cfg.state_path, state)
+    if failed_sources:
+        typer.echo(f"Fetch errors ({len(failed_sources)}): {', '.join(failed_sources)}", err=True)
     if not results:
         typer.echo("No new articles found.", err=True)
         raise typer.Exit(code=0)
