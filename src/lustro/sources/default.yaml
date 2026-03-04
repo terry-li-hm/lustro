@@ -17,6 +17,18 @@ web_sources:
     rss: https://www.deeplearning.ai/the-batch/feed/
     url: https://www.deeplearning.ai/the-batch/
 
+  - name: Import AI
+    tier: 1
+    cadence: weekly
+    rss: https://jack-clark.net/feed/
+    url: https://jack-clark.net/
+
+  - name: Ahead of AI
+    tier: 1
+    cadence: weekly
+    rss: https://magazine.sebastianraschka.com/feed
+    url: https://magazine.sebastianraschka.com/
+
   - name: Interconnects
     tier: 1
     cadence: weekly
@@ -40,6 +52,18 @@ web_sources:
     cadence: weekly
     # RSS dead (404) as of Feb 2026
     url: https://developers.openai.com/blog
+
+  - name: Latent Space
+    tier: 2
+    cadence: weekly
+    rss: https://www.latent.space/feed
+    url: https://www.latent.space/
+
+  - name: AI Snake Oil
+    tier: 2
+    cadence: weekly
+    rss: https://aisnakeoil.substack.com/feed
+    url: https://aisnakeoil.substack.com/
 
   - name: Google DeepMind Blog
     tier: 2
