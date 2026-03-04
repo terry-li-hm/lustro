@@ -69,14 +69,32 @@ def _get_last_scan_date(state: dict[str, str]) -> str:
     return (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
 
 
-def _source_since_date(state: dict[str, str], name: str, fallback: str) -> str:
-    """Per-source since_date: use the source's own last-scan timestamp if available."""
+_CADENCE_LOOKBACK: dict[str, int] = {
+    "daily": 2,
+    "twice_weekly": 5,
+    "weekly": 10,
+    "biweekly": 20,
+    "monthly": 35,
+}
+
+
+def _source_since_date(
+    state: dict[str, str], name: str, fallback: str, cadence: str = "daily", now: datetime | None = None
+) -> str:
+    """Per-source since_date: own last-scan timestamp, or cadence-appropriate lookback for new sources."""
     val = state.get(name)
     if val:
         dt = _parse_aware(val)
         if dt is not None:
             return dt.strftime("%Y-%m-%d")
-    return fallback
+    # New source: use cadence-aware lookback instead of global since_date
+    # (global date is "today" when other sources ran today, causing new sources to find nothing)
+    lookback_days = _CADENCE_LOOKBACK.get(cadence, 2)
+    if now is None:
+        now = datetime.now(timezone.utc)
+    lookback = (now - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+    # Use whichever gives more history
+    return min(fallback, lookback)
 
 
 @app.command()
@@ -125,7 +143,7 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
             continue
         typer.echo(f"Fetching: {name}...", err=True)
         fetch_failed = False
-        since_date = _source_since_date(state, name, global_since_date)
+        since_date = _source_since_date(state, name, global_since_date, cadence=cadence, now=now)
         if source.get("bookmarks"):
             articles = fetch_x_bookmarks(since_date, bird_path=cfg.resolve_bird())
         elif "rss" in source:
