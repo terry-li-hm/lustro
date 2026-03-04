@@ -116,6 +116,34 @@ def fetch_stealth_url(url: str, profile_dir: Path) -> str | None:
         return None
 
 
+def fetch_stealth_html(url: str, profile_dir: Path) -> str | None:
+    """Fetch URL using nodriver and return rendered body HTML for link extraction."""
+    try:
+        import asyncio
+        import nodriver as uc
+
+        async def _fetch() -> str:
+            browser = await uc.start(
+                headless=True,
+                user_data_dir=str(profile_dir),
+            )
+            try:
+                page = await browser.get(url)
+                await asyncio.sleep(4)
+                html = await page.evaluate("document.body.outerHTML")
+                return str(html) if html is not None else ""
+            finally:
+                browser.stop()
+
+        return asyncio.run(_fetch())
+    except ImportError:
+        print("  nodriver not installed — skipping stealth_web", file=sys.stderr)
+        return None
+    except Exception as exc:
+        print(f"  stealth_web error {url}: {exc}", file=sys.stderr)
+        return None
+
+
 def fetch_rss(
     url: str,
     since_date: str,
@@ -198,13 +226,43 @@ def fetch_rss(
         return []
 
 
-def fetch_web(url: str, max_items: int = 5) -> list[dict[str, str]]:
+def fetch_web(
+    url: str,
+    max_items: int = 5,
+    selector: str | None = None,
+    stealth: bool = False,
+    profile_dir: Path | None = None,
+) -> list[dict[str, str]]:
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
+        if stealth and _is_safe_url(url):
+            html = fetch_stealth_html(
+                url,
+                profile_dir or Path.home() / ".config" / "lustro" / "nodriver-profile",
+            )
+            if html is None:
+                return []
+            soup = BeautifulSoup(html, "html.parser")
+            print(f"  stealth_web: {url} [{len(html)} chars]", file=sys.stderr)
+        else:
+            resp = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "html.parser")
 
         articles: list[dict[str, str]] = []
+
+        if selector:
+            for tag in soup.select(selector)[:max_items]:
+                title = tag.get_text().strip()
+                if title and len(title) > 10:
+                    link = tag.get("href", "") if tag.name == "a" else ""
+                    if not link:
+                        a = tag.find("a")
+                        link = a.get("href", "") if a else ""
+                    if link and not link.startswith("http"):
+                        link = urljoin(url, link)
+                    articles.append({"title": title, "date": "", "summary": "", "link": str(link)})
+            return articles
+
         for tag in soup.select("article h2 a, article h3 a, h2 a, h3 a, .post-title a")[:max_items]:
             title = tag.get_text().strip()
             if title and len(title) > 10:

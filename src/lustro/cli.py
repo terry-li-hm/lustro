@@ -124,12 +124,32 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
             )
             if articles is None and "url" in source:
                 typer.echo(f"  Falling back to web: {source['url']}", err=True)
-                articles = fetch_web(source["url"])
+                articles = fetch_web(
+                    source["url"],
+                    selector=source.get("selector"),
+                    stealth=bool(source.get("stealth_web", False)),
+                    profile_dir=Path(
+                        cfg.config_data.get(
+                            "nodriver_profile_dir",
+                            Path.home() / ".config" / "lustro" / "nodriver-profile",
+                        )
+                    ),
+                )
             articles = articles or []
         elif "handle" in source:
             articles = fetch_x_account(source["handle"], since_date, bird_path=cfg.resolve_bird())
         else:
-            articles = fetch_web(source.get("url", ""))
+            articles = fetch_web(
+                source.get("url", ""),
+                selector=source.get("selector"),
+                stealth=bool(source.get("stealth_web", False)),
+                profile_dir=Path(
+                    cfg.config_data.get(
+                        "nodriver_profile_dir",
+                        Path.home() / ".config" / "lustro" / "nodriver-profile",
+                    )
+                ),
+            )
 
         new_articles = []
         for article in articles:
