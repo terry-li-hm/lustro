@@ -17,6 +17,12 @@ web_sources:
     rss: https://www.deeplearning.ai/the-batch/feed/
     url: https://www.deeplearning.ai/the-batch/
 
+  - name: Interconnects
+    tier: 1
+    cadence: weekly
+    rss: https://www.interconnects.ai/feed
+    url: https://www.interconnects.ai/
+
   - name: Anthropic Blog
     tier: 1
     cadence: twice_weekly
