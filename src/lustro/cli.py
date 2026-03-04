@@ -209,7 +209,8 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
             z_key = f"_zeros:{name}"
             zeros = int(state.get(z_key, 0)) + 1
             state[z_key] = str(zeros)
-            if zeros >= 5:
+            _zero_threshold = {"daily": 5, "twice_weekly": 4, "weekly": 3, "biweekly": 2, "monthly": 2}.get(cadence, 5)
+            if zeros >= _zero_threshold:
                 typer.echo(
                     f"  Warning: {name} has {zeros} consecutive zero-article fetches",
                     err=True,

@@ -38,6 +38,9 @@ def is_junk(title: str) -> bool:
     norm = re.sub(r"[^\w\s]", "", title.lower()).strip()
     if len(norm) < 15:
         return True
+    # Promotional titles starting with emoji (e.g. "🚨NEW: ...")
+    if title and ord(title[0]) > 0x2000:
+        return True
 
     junk = {
         "current accounts",

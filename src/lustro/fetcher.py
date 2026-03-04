@@ -648,6 +648,16 @@ def check_sources(
             except Exception as exc:
                 print(f"{name:<25} {tier:>1} {'ERR':>8} {str(exc)[:20]}", file=sys.stderr)
 
+    wechat_sources = [s for s in sources if s.get("rss", "").startswith("http://localhost:8001")]
+    if wechat_sources:
+        try:
+            resp = requests.get("http://localhost:8001/", timeout=5)
+            resp.close()
+            w_status = str(resp.status_code)
+        except Exception:
+            w_status = "DOWN"
+        print(f"\n{'Wechat2RSS (localhost:8001)':<36} {'—':>1} {w_status:>5} {f'({len(wechat_sources)} feeds)':>12}", file=sys.stderr)
+
     bm_count = len(x_bookmarks) if x_bookmarks else 0
     parts = [f"{len(sources)} web/RSS", f"{len(x_accounts)} X accounts"]
     if bm_count:
