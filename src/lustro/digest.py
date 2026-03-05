@@ -247,12 +247,36 @@ def write_digest(
     return output_path
 
 
+def _build_source_tags_map(cfg: LustroConfig) -> dict[str, list[str]]:
+    result: dict[str, list[str]] = {}
+    for source in cfg.sources:
+        name = source.get("name", "")
+        tags = source.get("tags", ["ai"])
+        if name:
+            result[name] = tags if isinstance(tags, list) else [tags]
+    return result
+
+
+def _filter_by_tags(
+    items: list[dict[str, Any]],
+    tags: list[str],
+    source_tags: dict[str, list[str]],
+    source_key: str = "source",
+) -> list[dict[str, Any]]:
+    tag_set = set(tags)
+    return [
+        item for item in items
+        if tag_set & set(source_tags.get(item.get(source_key, ""), ["ai"]))
+    ]
+
+
 def run_digest(
     cfg: LustroConfig,
     month: str | None,
     dry_run: bool,
     themes: int | None,
     model: str | None,
+    tags: list[str] | None = None,
 ) -> tuple[list[dict[str, Any]], Path | None]:
     target_month = _resolve_month(month)
     max_themes = themes if themes is not None else DEFAULT_THEME_COUNT
@@ -260,6 +284,11 @@ def run_digest(
 
     articles = load_archived_articles(cfg.article_cache_dir, target_month)
     log_entries = load_news_log_entries(cfg.log_path, target_month)
+
+    if tags:
+        source_tags = _build_source_tags_map(cfg)
+        articles = _filter_by_tags(articles, tags, source_tags)
+        log_entries = _filter_by_tags(log_entries, tags, source_tags)
     if not articles and not log_entries:
         raise RuntimeError(f"No data found for {target_month}. Run `lustro fetch` first.")
 

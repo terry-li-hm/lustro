@@ -269,6 +269,7 @@ def digest(
     dry_run: bool = typer.Option(False, "--dry-run", help="Show themes only"),
     themes: Optional[int] = typer.Option(None, "--themes", help="Max themes"),
     model: Optional[str] = typer.Option(None, "--model", help="Model ID"),
+    tag: Optional[list[str]] = typer.Option(None, "--tag", "-t", help="Filter by tag (repeatable)"),
 ) -> None:
     cfg = load_config()
     from lustro.digest import run_digest
@@ -280,6 +281,7 @@ def digest(
             dry_run=dry_run,
             themes=themes,
             model=model,
+            tags=tag or [],
         )
     except RuntimeError as exc:
         typer.echo(f"Error: {exc}", err=True)

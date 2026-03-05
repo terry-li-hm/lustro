@@ -2,125 +2,146 @@ web_sources:
   - name: Simon Willison
     tier: 1
     cadence: daily
+    tags: [ai]
     rss: https://simonwillison.net/atom/everything/
     url: https://simonwillison.net/
 
   - name: Hacker News Front Page
     tier: 1
     cadence: daily
+    tags: [ai, tech]
     rss: https://hnrss.org/frontpage
     url: https://news.ycombinator.com/
 
   - name: The Batch
     tier: 1
     cadence: weekly
+    tags: [ai]
     rss: https://www.deeplearning.ai/the-batch/feed/
     url: https://www.deeplearning.ai/the-batch/
 
   - name: Import AI
     tier: 1
     cadence: weekly
+    tags: [ai]
     rss: https://jack-clark.net/feed/
     url: https://jack-clark.net/
 
   - name: Ahead of AI
     tier: 1
     cadence: weekly
+    tags: [ai]
     rss: https://magazine.sebastianraschka.com/feed
     url: https://magazine.sebastianraschka.com/
 
   - name: Interconnects
     tier: 1
     cadence: weekly
+    tags: [ai]
     rss: https://www.interconnects.ai/feed
     url: https://www.interconnects.ai/
 
   - name: Anthropic Blog
     tier: 1
     cadence: twice_weekly
+    tags: [ai]
     rss: https://www.anthropic.com/news/rss.xml
     url: https://www.anthropic.com/news
 
   - name: OpenAI Blog
     tier: 1
     cadence: weekly
+    tags: [ai]
     rss: https://openai.com/news/rss.xml
     url: https://openai.com/news/
 
   - name: OpenAI Developer Blog
     tier: 1
     cadence: weekly
+    tags: [ai]
     # RSS dead (404) as of Feb 2026
     url: https://developers.openai.com/blog
 
   - name: The Gradient
     tier: 2
     cadence: weekly
+    tags: [ai]
     rss: https://thegradient.pub/rss/
     url: https://thegradient.pub/
 
   - name: MIT Technology Review AI
     tier: 2
     cadence: daily
+    tags: [ai, tech]
     rss: https://www.technologyreview.com/feed/
     url: https://www.technologyreview.com/topic/artificial-intelligence/
 
   - name: Latent Space
     tier: 2
     cadence: weekly
+    tags: [ai]
     rss: https://www.latent.space/feed
     url: https://www.latent.space/
 
   - name: AI Snake Oil
     tier: 2
     cadence: weekly
+    tags: [ai]
     rss: https://aisnakeoil.substack.com/feed
     url: https://aisnakeoil.substack.com/
 
   - name: Google DeepMind Blog
     tier: 2
     cadence: weekly
+    tags: [ai]
     rss: https://deepmind.google/discover/blog/rss.xml
     url: https://deepmind.google/discover/blog/
 
   - name: Hugging Face Blog
     tier: 2
     cadence: weekly
+    tags: [ai]
     rss: https://huggingface.co/blog/feed.xml
     url: https://huggingface.co/blog
 
   - name: Stripe Engineering
     tier: 2
     cadence: weekly
+    tags: [tech]
     rss: https://stripe.com/blog/feed.rss
     url: https://stripe.com/blog/engineering
 
   - name: GitHub Blog Engineering
     tier: 2
     cadence: weekly
+    tags: [tech]
     rss: https://github.blog/engineering/feed/
     url: https://github.blog/engineering/
 
   - name: InfoQ 中文 AI&大模型
     tier: 2
     cadence: daily
+    tags: [ai]
     rss: https://rsshub.rssforever.com/infoq/topic/AI
     url: https://www.infoq.cn/topic/AI
 
   - name: 量子位
     tier: 2
     cadence: daily
+    tags: [ai]
     rss: http://localhost:8001/feed/3236757533.xml?k=${WECHAT2RSS_TOKEN}
     url: https://www.qbitai.com/
 
   - name: 新智元
     tier: 2
     cadence: daily
+    tags: [ai]
     rss: http://localhost:8001/feed/3271041950.xml?k=${WECHAT2RSS_TOKEN}
     url: https://www.xinzhiyuan.com/
 
   - name: 机器之心
     tier: 2
     cadence: daily
+    tags: [ai]
     rss: http://localhost:8001/feed/3073282833.xml?k=${WECHAT2RSS_TOKEN}
     url: https://www.jiqizhixin.com/
