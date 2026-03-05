@@ -108,7 +108,7 @@ def fetch(
 
 def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
     state = load_state(cfg.state_path)
-    from lustro.fetcher import archive_article, fetch_linkedin_company, fetch_rss, fetch_web, fetch_x_account, fetch_x_bookmarks, unbookmark_tweets
+    from lustro.fetcher import archive_article, fetch_json_api, fetch_linkedin_company, fetch_rss, fetch_web, fetch_x_account, fetch_x_bookmarks, unbookmark_tweets
     from lustro.log import (
         _title_prefix,
         append_to_log,
@@ -146,6 +146,18 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
         since_date = _source_since_date(state, name, global_since_date, cadence=cadence, now=now)
         if source.get("bookmarks"):
             articles = fetch_x_bookmarks(since_date, bird_path=cfg.resolve_bird())
+        elif "api" in source:
+            articles = fetch_json_api(
+                source["api"],
+                since_date,
+                title_key=source.get("api_title_key", "title"),
+                link_key=source.get("api_link_key", "link"),
+                date_key=source.get("api_date_key", "date"),
+            )
+            if articles is None:
+                fetch_failed = True
+                failed_sources.append(f"{name} (json api error)")
+                articles = []
         elif "rss" in source:
             articles = fetch_rss(
                 source["rss"],

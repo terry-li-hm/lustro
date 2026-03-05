@@ -219,6 +219,57 @@ def fetch_linkedin_company(
         return None
 
 
+def fetch_json_api(
+    url: str,
+    since_date: str,
+    title_key: str = "title",
+    link_key: str = "link",
+    date_key: str = "date",
+    records_path: tuple[str, ...] = ("result", "records"),
+    max_items: int = 10,
+) -> list[dict[str, str]] | None:
+    """Fetch articles from a JSON API (e.g. HKMA press releases).
+
+    Args:
+        url: API endpoint URL.
+        since_date: ISO date string; entries on or before this date are skipped.
+        records_path: Tuple of keys to drill into the response to reach the list of records.
+    """
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as exc:
+        print(f"  JSON API error: {url} — {exc}", file=sys.stderr)
+        return None
+
+    records = data
+    for key in records_path:
+        if isinstance(records, dict):
+            records = records.get(key, [])
+        else:
+            records = []
+            break
+
+    if not isinstance(records, list):
+        return None
+
+    articles: list[dict[str, str]] = []
+    for record in records[:max_items * 3]:
+        title = str(record.get(title_key, "")).strip()
+        if not title:
+            continue
+        date_str = str(record.get(date_key, ""))[:10]  # ISO date, trim time if present
+        if date_str and date_str <= since_date:
+            continue
+        link = str(record.get(link_key, ""))
+        articles.append({"title": title, "link": link, "date": date_str, "summary": ""})
+        if len(articles) >= max_items:
+            break
+
+    return articles
+
+
 def fetch_rss(
     url: str,
     since_date: str,
