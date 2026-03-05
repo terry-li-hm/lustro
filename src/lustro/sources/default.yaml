@@ -110,9 +110,14 @@ web_sources:
   - name: 量子位
     tier: 2
     cadence: daily
-    rss: https://rsshub.rssforever.com/qbitai
+    rss: http://localhost:8001/feed/3236757533.xml?k=${WECHAT2RSS_TOKEN}
     url: https://www.qbitai.com/
-    # Note: RSSHub route — verify if feeds go stale
+
+  - name: 新智元
+    tier: 2
+    cadence: daily
+    rss: http://localhost:8001/feed/3271041950.xml?k=${WECHAT2RSS_TOKEN}
+    url: https://www.xinzhiyuan.com/
 
   - name: 机器之心
     tier: 2
