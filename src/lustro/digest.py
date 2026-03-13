@@ -81,7 +81,8 @@ def load_news_log_entries(log_path: Path, month: str) -> list[dict[str, str]]:
             continue
 
         article_match = re.match(
-            r"^- \*\*(?:\[([^\]]+)\]\(([^)]+)\)|([^*]+))\*\*"
+            r"^- (?:\[★\] )?\*\*(?:\[([^\]]+)\]\(([^)]+)\)|([^*]+))\*\*"
+            r"(?:\s*\(banking_angle: ([^)]+)\))?"
             r"(?:\s*\(([^)]*)\))?"
             r"(?:\s*—\s*(.+))?",
             line,
@@ -94,9 +95,9 @@ def load_news_log_entries(log_path: Path, month: str) -> list[dict[str, str]]:
                 {
                     "title": title,
                     "source": current_source,
-                    "date": article_match.group(4) or current_date,
+                    "date": article_match.group(5) or current_date,
                     "link": article_match.group(2) or "",
-                    "summary": article_match.group(5) or "",
+                    "summary": article_match.group(6) or "",
                 }
             )
     return entries

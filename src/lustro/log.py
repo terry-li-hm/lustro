@@ -95,22 +95,35 @@ def format_markdown(results: dict[str, list[dict[str, str]]], date_str: str) -> 
             summary_part = f" — {_sanitize_text(raw_summary)}" if raw_summary else ""
             title = _sanitize_text(article.get("title", ""))
             title_part = f"[{title}]({article['link']})" if article.get("link") else title
-            lines.append(f"- **{title_part}**{date_part}{summary_part}")
+            marker = "[★] " if int(article.get("score", 0) or 0) >= 7 else ""
+            banking_angle = _sanitize_text(article.get("banking_angle", ""))
+            banking_part = f" (banking_angle: {banking_angle})" if marker and banking_angle and banking_angle != "N/A" else ""
+            lines.append(f"- {marker}**{title_part}**{banking_part}{date_part}{summary_part}")
         lines.append("")
     return "\n".join(lines)
 
 
 def append_to_log(log_path: Path, markdown: str) -> None:
-    marker = "<!-- News entries below, added by /lustro -->"
+    markers = [
+        "<!-- News entries below, added by /lustro -->",
+        "<!-- News entries below -->",
+    ]
     if not log_path.exists():
         _atomic_write(log_path, markdown)
         return
 
     content = log_path.read_text(encoding="utf-8")
-    if marker in content:
-        content = content.replace(marker, f"{marker}\n\n{markdown}", 1)
-    else:
+    marker = next((candidate for candidate in markers if candidate in content), None)
+    if marker is None:
         content += f"\n\n{markdown}"
+        _atomic_write(log_path, content)
+        return
+
+    before, _, after = content.partition(marker)
+    suffix = after.lstrip("\n")
+    content = f"{before}{marker}\n\n{markdown}"
+    if suffix:
+        content = f"{content}\n{suffix}"
     _atomic_write(log_path, content)
 
 

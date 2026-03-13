@@ -117,6 +117,7 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
         load_title_prefixes,
         rotate_log,
     )
+    from lustro.relevance import log_score, score_item
     from lustro.state import save_state, should_fetch
 
     now = datetime.now(timezone.utc)
@@ -216,6 +217,19 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
                 continue
             new_articles.append(article)
             title_prefixes.add(prefix)
+
+        for article in new_articles:
+            scores = score_item(
+                article.get("title", ""),
+                name,
+                article.get("summary", ""),
+            )
+            article["source"] = name
+            article["timestamp"] = now.isoformat()
+            article["score"] = str(scores.get("score", 0))
+            article["banking_angle"] = str(scores.get("banking_angle", ""))
+            article["talking_point"] = str(scores.get("talking_point", ""))
+            log_score(article, scores)
 
         if not no_archive:
             for article in new_articles:
@@ -424,6 +438,44 @@ def sources(
     for name, source_type, source_tier, cadence in rows:
         typer.echo(f"{name[:36]:<36} {source_type:<4} {source_tier:>4} {cadence:<12}")
     typer.echo(f"\nTotal: {len(rows)} sources")
+    raise typer.Exit(code=0)
+
+
+@app.command()
+def relevance(
+    top: Optional[int] = typer.Option(None, "--top", help="Show top N highest-scored items from the last 7 days"),
+) -> None:
+    from lustro.relevance import get_stats, get_top_items
+
+    if top is not None:
+        items = get_top_items(limit=top)
+        if not items:
+            typer.echo("No recent relevance data found.")
+            raise typer.Exit(code=0)
+        for index, item in enumerate(items, 1):
+            title = item.get("title", "Untitled")
+            source = item.get("source", "Unknown")
+            score = item.get("score", 0)
+            angle = item.get("banking_angle", "")
+            line = f"{index}. [{score}/10] {title} — {source}"
+            if angle and angle != "N/A":
+                line = f"{line} ({angle})"
+            typer.echo(line)
+        raise typer.Exit(code=0)
+
+    stats = get_stats()
+    if stats.get("status") == "insufficient_data":
+        typer.echo("Relevance stats unavailable: insufficient_data")
+        raise typer.Exit(code=0)
+
+    typer.echo("Relevance scoring stats")
+    typer.echo(f"Total scored: {stats['total_scored']}")
+    typer.echo(f"Total engaged: {stats['total_engaged']}")
+    typer.echo(f"Average engaged score: {stats['avg_engaged_score']:.2f}")
+    typer.echo(f"False positives (count): {stats['false_positives_count']}")
+    typer.echo("False negatives:")
+    for title in stats["false_negatives"]:
+        typer.echo(f"- {title}")
     raise typer.Exit(code=0)
 
 

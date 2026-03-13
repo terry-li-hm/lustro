@@ -41,6 +41,29 @@ def test_format_markdown():
     assert "- **[Article 1](https://example.com/a1)** (2026-02-24) — Summary text" in md
 
 
+def test_format_markdown_high_relevance_marker():
+    results = {
+        "Example": [
+            {
+                "title": "Banking launch",
+                "date": "2026-02-24",
+                "summary": "Summary text",
+                "link": "https://example.com/bank",
+                "score": "8",
+                "banking_angle": "Directly relevant to regulated deployments",
+            }
+        ]
+    }
+
+    md = format_markdown(results, "2026-02-24")
+
+    assert (
+        "- [★] **[Banking launch](https://example.com/bank)**"
+        " (banking_angle: Directly relevant to regulated deployments)"
+        " (2026-02-24) — Summary text"
+    ) in md
+
+
 def test_append_to_log_with_marker(tmp_path):
     log_path = tmp_path / "news.md"
     log_path.write_text("# Header\n\n<!-- News entries below -->\n", encoding="utf-8")
