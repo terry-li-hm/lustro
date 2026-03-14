@@ -564,6 +564,13 @@ def archive_article(
         except Exception as exc:
             print(f"  Archive error {link}: {exc}", file=sys.stderr)
 
+    # Skip articles with insufficient text (scrape failures, paywalled stubs)
+    min_text = 100
+    if not text or len(text) < min_text:
+        status = f"{len(text)} chars" if text else "null"
+        print(f"  Skipped (too short): {filename} [{status}]", file=sys.stderr)
+        return
+
     record = {
         "title": title,
         "date": date_str,
@@ -577,8 +584,7 @@ def archive_article(
 
     cache_dir.mkdir(parents=True, exist_ok=True)
     filepath.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
-    status = f"{len(text)} chars" if text else "null (extraction failed)"
-    print(f"  Archived: {filename} [{status}]", file=sys.stderr)
+    print(f"  Archived: {filename} [{len(text)} chars]", file=sys.stderr)
 
 
 def check_sources(
