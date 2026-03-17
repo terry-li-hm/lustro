@@ -571,6 +571,20 @@ def archive_article(
         print(f"  Skipped (too short): {filename} [{status}]", file=sys.stderr)
         return
 
+    # Content-hash dedup: skip if identical text already archived for same date+source
+    content_hash = hashlib.md5(text.encode()).hexdigest()
+    prefix = f"{date_str}_{slug}_"
+    if cache_dir.exists():
+        for existing in cache_dir.glob(f"{prefix}*.json"):
+            try:
+                existing_data = json.loads(existing.read_text(encoding="utf-8"))
+                existing_text = existing_data.get("text") or ""
+                if hashlib.md5(existing_text.encode()).hexdigest() == content_hash:
+                    print(f"  Skipped (duplicate content): {filename}", file=sys.stderr)
+                    return
+            except (OSError, json.JSONDecodeError):
+                continue
+
     record = {
         "title": title,
         "date": date_str,
