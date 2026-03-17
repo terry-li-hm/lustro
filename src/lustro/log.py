@@ -148,7 +148,7 @@ def rotate_log(
     keep_from = None
     for i, line in enumerate(lines):
         match = re.match(r"^## (\d{4}-\d{2}-\d{2})", line)
-        if match and match.group(1) < cutoff:
+        if match and match.group(1) <= cutoff:
             keep_from = i
             break
 
