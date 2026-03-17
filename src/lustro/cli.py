@@ -118,7 +118,7 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
         rotate_log,
     )
     from lustro.relevance import log_score, score_item
-    from lustro.state import save_state, should_fetch
+    from lustro.state import save_state
 
     now = datetime.now(timezone.utc)
     rotate_log(cfg.log_path, cfg.data_dir, cfg.config_data.get("max_log_lines", 500), now)
@@ -140,8 +140,6 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
         name = source["name"]
         cadence = source.get("cadence", "daily")
         tier = source.get("tier", 2)
-        if not should_fetch(state, name, cadence, now=now):
-            continue
         typer.echo(f"Fetching: {name}...", err=True)
         fetch_failed = False
         since_date = _source_since_date(state, name, global_since_date, cadence=cadence, now=now)
