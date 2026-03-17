@@ -1,13 +1,21 @@
 from __future__ import annotations
 
-import argparse
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+import typer
 
-from lustro.cli import _cmd_fetch_locked
+from lustro.cli import _fetch_locked
 from lustro.config import LustroConfig
+
+
+def _call_fetch_locked(cfg, no_archive: bool) -> None:
+    """Wrap _fetch_locked to absorb the typer.Exit it always raises."""
+    try:
+        _fetch_locked(cfg, no_archive=no_archive)
+    except typer.Exit:
+        pass
 
 
 @pytest.fixture
@@ -43,7 +51,7 @@ def test_fetch_fallback_and_zeros(monkeypatch, mock_cfg, capsys):
     # Mock fetch functions
     # 1. First call: fetch_rss returns None, fetch_web returns results
     monkeypatch.setattr("lustro.fetcher.fetch_rss", lambda _url, _since, **kwargs: None)
-    monkeypatch.setattr("lustro.fetcher.fetch_web", lambda _url: [{"title": "Web Article", "link": "https://live.web/1"}])
+    monkeypatch.setattr("lustro.fetcher.fetch_web", lambda _url, **kwargs: [{"title": "Web Article", "link": "https://live.web/1"}])
     
     # Mock other needed functions
     monkeypatch.setattr("lustro.state.should_fetch", lambda *args, **kwargs: True)
@@ -54,20 +62,18 @@ def test_fetch_fallback_and_zeros(monkeypatch, mock_cfg, capsys):
     monkeypatch.setattr("lustro.log.append_to_log", lambda *args: None)
     monkeypatch.setattr("lustro.fetcher.archive_article", lambda *args: None)
 
-    args = argparse.Namespace(no_archive=True)
-    
     # Run once for fallback success
-    _cmd_fetch_locked(args, mock_cfg)
-    
+    _call_fetch_locked(mock_cfg, no_archive=True)
+
     stderr = capsys.readouterr().err
-    assert "Falling back to web" in stderr
+    assert "falling back to web" in stderr.lower()
 
     # 2. Mock fetch_web to return nothing to test zeros
-    monkeypatch.setattr("lustro.fetcher.fetch_web", lambda _url: [])
-    
+    monkeypatch.setattr("lustro.fetcher.fetch_web", lambda _url, **kwargs: [])
+
     # Run 5 times to see the warning
     for i in range(5):
-        _cmd_fetch_locked(args, mock_cfg)
+        _call_fetch_locked(mock_cfg, no_archive=True)
     
     stderr = capsys.readouterr().err
     assert "Warning: FallbackSource has 5 consecutive zero-article fetches" in stderr

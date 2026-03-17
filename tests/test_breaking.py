@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import argparse
 import json
 from datetime import datetime, timedelta, timezone
 
 import yaml
 
-from lustro.breaking import can_alert, is_breaking, reset_daily_counter
-from lustro.cli import cmd_breaking
+from lustro.breaking import can_alert, is_breaking, reset_daily_counter, run_breaking
 from lustro.config import load_config
 
 
@@ -76,14 +74,14 @@ def test_cmd_breaking_dry_run(monkeypatch, xdg_env, capsys):
     )
     monkeypatch.setattr("lustro.breaking.fetch_web", lambda *_args, **_kwargs: [])
 
-    exit_code = cmd_breaking(argparse.Namespace(dry_run=True))
+    cfg = load_config()
+    exit_code = run_breaking(cfg=cfg, dry_run=True)
 
     assert exit_code == 0
     stderr = capsys.readouterr().err
     assert "1 breaking match(es) found." in stderr
     assert "[DRY RUN]" in stderr
 
-    cfg = load_config()
     state_path = cfg.cache_dir / "breaking-state.json"
     assert state_path.exists()
     state = json.loads(state_path.read_text(encoding="utf-8"))

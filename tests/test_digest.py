@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from types import SimpleNamespace
 
 import pytest
 
-from lustro.cli import cmd_digest
 from lustro.config import load_config
 from lustro.digest import create_openai_client, run_digest
 
@@ -148,15 +146,15 @@ def test_cmd_digest_writes_output_file(xdg_env, monkeypatch):
     )
     monkeypatch.setattr("lustro.digest.create_openai_client", lambda _key: fake_client)
 
-    args = argparse.Namespace(
+    themes_result, output_path = run_digest(
+        cfg=cfg,
         month="2026-02",
         dry_run=False,
         themes=8,
         model="google/gemini-3-flash-preview",
     )
-    exit_code = cmd_digest(args)
 
-    assert exit_code == 0
+    assert output_path is not None
     output_file = cfg.digest_output_dir / "2026-02 AI Thematic Digest.md"
     assert output_file.exists()
     content = output_file.read_text(encoding="utf-8")

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import argparse
 import json
 from types import SimpleNamespace
 
 import yaml
 
-from lustro.cli import cmd_discover
 from lustro.config import load_config
 from lustro.discover import _compile_keywords, matches_keywords, run_discover
 
@@ -91,6 +89,7 @@ def test_cmd_discover_uses_count_override(monkeypatch, xdg_env):
     config_home, _, _ = xdg_env
     _write_sources_with_discovery(config_home)
     called = {}
+    cfg = load_config()
 
     monkeypatch.setattr("lustro.discover.shutil.which", lambda _name: "/usr/local/bin/bird")
 
@@ -99,7 +98,7 @@ def test_cmd_discover_uses_count_override(monkeypatch, xdg_env):
         return SimpleNamespace(returncode=0, stdout="[]", stderr="")
 
     monkeypatch.setattr("lustro.discover.subprocess.run", fake_run)
-    exit_code = cmd_discover(argparse.Namespace(count=20))
+    exit_code = run_discover(cfg, count=20)
 
     assert exit_code == 0
     assert called["cmd"][:4] == ["/usr/local/bin/bird", "home", "-n", "20"]
