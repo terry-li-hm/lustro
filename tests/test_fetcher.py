@@ -76,8 +76,12 @@ def test_fetch_web(monkeypatch):
 
 
 def test_archive_article(monkeypatch, tmp_path):
+    full_text = (
+        "This is the full text body of a substantial article about recent advances "
+        "in artificial intelligence research and its implications for the industry."
+    )
     monkeypatch.setattr("lustro.fetcher.trafilatura.fetch_url", lambda _url: "raw-page")
-    monkeypatch.setattr("lustro.fetcher.trafilatura.extract", lambda _raw: "full text body")
+    monkeypatch.setattr("lustro.fetcher.trafilatura.extract", lambda _raw: full_text)
 
     article = {
         "title": "A New Discovery in AI",
@@ -93,7 +97,7 @@ def test_archive_article(monkeypatch, tmp_path):
     assert len(files) == 1
     payload = json.loads(files[0].read_text(encoding="utf-8"))
     assert payload["title"] == article["title"]
-    assert payload["text"] == "full text body"
+    assert payload["text"] == full_text
     assert payload["fetched_at"] == now.isoformat()
 
 
