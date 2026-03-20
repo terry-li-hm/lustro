@@ -5,9 +5,13 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, os.path.join(os.path.expanduser("~"), "officina", "lib"))
+from llm import query as _llm_query
 
 RELEVANCE_LOG = Path.home() / ".cache" / "lustro" / "relevance.jsonl"
 ENGAGEMENT_LOG = Path.home() / ".cache" / "lustro" / "engagement.jsonl"
@@ -39,22 +43,14 @@ def score_item(title: str, source: str, summary: str) -> dict[str, Any]:
     prompt = SCORING_PROMPT.format(title=title, source=source, summary=summary)
 
     try:
-        result = subprocess.run(
-            ["gemini", "-m", "gemini-3-flash-preview", "-p", prompt, "--yolo"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            env={k: v for k, v in os.environ.items() if k != "CLAUDECODE"},
-        )
-        if result.returncode == 0:
-            text = result.stdout.strip()
-            start = text.find("{")
-            end = text.rfind("}") + 1
-            if start >= 0 and end > start:
-                payload = json.loads(text[start:end])
-                if isinstance(payload, dict):
-                    return _normalize_score_payload(payload)
-    except (subprocess.TimeoutExpired, FileNotFoundError, json.JSONDecodeError):
+        text = _llm_query("gemini-flash", prompt, timeout=30)
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        if start >= 0 and end > start:
+            payload = json.loads(text[start:end])
+            if isinstance(payload, dict):
+                return _normalize_score_payload(payload)
+    except (subprocess.TimeoutExpired, FileNotFoundError, json.JSONDecodeError, Exception):
         pass
 
     return _keyword_score(title, summary)
