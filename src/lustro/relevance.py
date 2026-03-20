@@ -40,7 +40,7 @@ def score_item(title: str, source: str, summary: str) -> dict[str, Any]:
 
     try:
         result = subprocess.run(
-            ["gemini", "-m", "gemini-2.0-flash", "-p", prompt, "--yolo"],
+            ["gemini", "-m", "gemini-3-flash-preview", "-p", prompt, "--yolo"],
             capture_output=True,
             text=True,
             timeout=30,

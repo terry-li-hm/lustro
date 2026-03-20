@@ -260,7 +260,7 @@ def fetch_json_api(
         if not title:
             continue
         date_str = str(record.get(date_key, ""))[:10]  # ISO date, trim time if present
-        if date_str and date_str <= since_date:
+        if date_str and date_str < since_date:
             continue
         link = str(record.get(link_key, ""))
         articles.append({"title": title, "link": link, "date": date_str, "summary": ""})
@@ -300,7 +300,7 @@ def fetch_rss(
             if not title:
                 continue
             date_str = _parse_feed_date(entry)
-            if date_str and date_str <= since_date:
+            if date_str and date_str < since_date:
                 continue
             link = str(_entry_get(entry, "link", ""))
             summary = _extract_summary(entry)

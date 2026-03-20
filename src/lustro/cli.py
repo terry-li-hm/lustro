@@ -65,7 +65,9 @@ def _get_last_scan_date(state: dict[str, str]) -> str:
         if dt is not None:
             dates.append(dt)
     if dates:
-        return max(dates).strftime("%Y-%m-%d")
+        # Subtract one day so articles published on the same calendar day as the
+        # last scan are not filtered out (date comparison is <=, not <).
+        return (max(dates) - timedelta(days=1)).strftime("%Y-%m-%d")
     return (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
 
 
@@ -86,7 +88,8 @@ def _source_since_date(
     if val:
         dt = _parse_aware(val)
         if dt is not None:
-            return dt.strftime("%Y-%m-%d")
+            # Subtract one day so same-day articles are not filtered by the <= comparison.
+            return (dt - timedelta(days=1)).strftime("%Y-%m-%d")
     # New source: use cadence-aware lookback instead of global since_date
     # (global date is "today" when other sources ran today, causing new sources to find nothing)
     lookback_days = _CADENCE_LOOKBACK.get(cadence, 2)
