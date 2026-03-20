@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import atexit
 import hashlib
 import ipaddress
 import json
+import os
 import re
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -18,6 +21,47 @@ import feedparser
 import requests
 import trafilatura
 from bs4 import BeautifulSoup
+
+# ---------------------------------------------------------------------------
+# Browser process leak guard
+# ---------------------------------------------------------------------------
+# nodriver's browser.stop() sends SIGTERM to the parent Chrome process but
+# does not wait for it, and Chrome's child processes (renderer, GPU, etc.)
+# can survive.  We track every PID spawned by fetch_stealth_* here and
+# forcefully kill any stragglers at process exit.
+
+_browser_pids: set[int] = set()
+
+
+def _kill_browser_pid(pid: int) -> None:
+    """Kill a Chrome parent process and all its children, best-effort."""
+    # Kill children first (macOS/Linux: pkill -P <pid>)
+    try:
+        subprocess.run(
+            ["pkill", "-9", "-P", str(pid)],
+            capture_output=True,
+            timeout=5,
+        )
+    except Exception:
+        pass
+    # Then kill the parent
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass  # already dead — fine
+    except Exception:
+        pass
+
+
+def _atexit_kill_browsers() -> None:
+    for pid in list(_browser_pids):
+        _kill_browser_pid(pid)
+    _browser_pids.clear()
+
+
+atexit.register(_atexit_kill_browsers)
+
+# ---------------------------------------------------------------------------
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; Lustro/0.2; +https://github.com/terry-li-hm/lustro)"
@@ -66,6 +110,51 @@ def _parse_feed_date(entry: Any) -> str:
     return ""
 
 
+def _parse_feed_datetime(entry: Any) -> str:
+    """Return ISO 8601 UTC datetime string from an RSS entry, or '' if unavailable.
+
+    Uses the time.struct_time fields (published_parsed / updated_parsed /
+    created_parsed) which feedparser normalises to UTC.  Falls back to the raw
+    string fields so we can try email-format parsing when the structured form is
+    absent.
+    """
+    import calendar
+
+    for field in ("published_parsed", "updated_parsed", "created_parsed"):
+        parsed = getattr(entry, field, None)
+        if parsed is None:
+            parsed = _entry_get(entry, field, None)
+        if parsed:
+            try:
+                # calendar.timegm interprets struct_time as UTC
+                ts = calendar.timegm(parsed)
+                dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+                return dt.isoformat()
+            except (TypeError, OverflowError, OSError):
+                continue
+
+    # Fallback: raw string fields (RFC 2822 / ISO 8601)
+    for field in ("published", "updated", "created"):
+        raw = _entry_get(entry, field, "")
+        if not raw:
+            continue
+        # Try common formats
+        for fmt in (
+            "%a, %d %b %Y %H:%M:%S %z",
+            "%Y-%m-%dT%H:%M:%S%z",
+            "%Y-%m-%dT%H:%M:%SZ",
+        ):
+            try:
+                dt = datetime.strptime(str(raw).strip(), fmt)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt.astimezone(timezone.utc).isoformat()
+            except ValueError:
+                continue
+
+    return ""
+
+
 def _parse_tweet_date(date_str: str) -> str:
     try:
         dt = datetime.strptime(date_str, "%a %b %d %H:%M:%S %z %Y")
@@ -99,6 +188,9 @@ def fetch_stealth_url(url: str, profile_dir: Path) -> str | None:
                 headless=True,
                 user_data_dir=str(profile_dir),
             )
+            pid: int | None = getattr(browser, "_process_pid", None)
+            if pid is not None:
+                _browser_pids.add(pid)
             try:
                 page = await browser.get(url)
                 await asyncio.sleep(4)
@@ -106,6 +198,9 @@ def fetch_stealth_url(url: str, profile_dir: Path) -> str | None:
                 return str(text) if text is not None else ""
             finally:
                 browser.stop()
+                if pid is not None:
+                    _kill_browser_pid(pid)
+                    _browser_pids.discard(pid)
 
         return asyncio.run(_fetch())
     except ImportError:
@@ -127,6 +222,9 @@ def fetch_stealth_html(url: str, profile_dir: Path) -> str | None:
                 headless=True,
                 user_data_dir=str(profile_dir),
             )
+            pid: int | None = getattr(browser, "_process_pid", None)
+            if pid is not None:
+                _browser_pids.add(pid)
             try:
                 page = await browser.get(url)
                 await asyncio.sleep(4)
@@ -134,6 +232,9 @@ def fetch_stealth_html(url: str, profile_dir: Path) -> str | None:
                 return str(html) if html is not None else ""
             finally:
                 browser.stop()
+                if pid is not None:
+                    _kill_browser_pid(pid)
+                    _browser_pids.discard(pid)
 
         return asyncio.run(_fetch())
     except ImportError:
@@ -340,7 +441,14 @@ def fetch_rss(
                 except Exception:
                     print(f"  full_fetch: {link} [failed]", file=sys.stderr)
 
-            article: dict[str, str] = {"title": title, "date": date_str, "summary": summary, "link": link}
+            published_at = _parse_feed_datetime(entry)
+            article: dict[str, str] = {
+                "title": title,
+                "date": date_str,
+                "published_at": published_at,
+                "summary": summary,
+                "link": link,
+            }
             if rss_text:
                 article["text"] = rss_text
             articles.append(article)
