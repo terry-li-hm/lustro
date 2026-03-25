@@ -49,21 +49,21 @@ def mock_cfg(tmp_path):
 
 def test_fetch_fallback_and_zeros(monkeypatch, mock_cfg, capsys):
     # Mock fetch functions
-    # 1. First call: fetch_rss returns None, fetch_web returns results
-    monkeypatch.setattr("lustro.fetcher.fetch_rss", lambda _url, _since, **kwargs: None)
-    monkeypatch.setattr("lustro.fetcher.fetch_web", lambda _url, **kwargs: [{"title": "Web Article", "link": "https://live.web/1"}])
-    
+    # 1. First call: internalize_rss returns None, internalize_web returns results
+    monkeypatch.setattr("lustro.fetcher.internalize_rss", lambda _url, _since, **kwargs: None)
+    monkeypatch.setattr("lustro.fetcher.internalize_web", lambda _url, **kwargs: [{"title": "Web Article", "link": "https://live.web/1"}])
+
     # Mock other needed functions
     # Patch both the module attribute and the name bound in cli's namespace
-    monkeypatch.setattr("lustro.state.should_fetch", lambda *args, **kwargs: True)
-    monkeypatch.setattr("lustro.cli.should_fetch", lambda *args, **kwargs: True)
-    monkeypatch.setattr("lustro.relevance.get_source_signal_ratio", lambda *args, **kwargs: 1.0)
+    monkeypatch.setattr("lustro.state.refractory_elapsed", lambda *args, **kwargs: True)
+    monkeypatch.setattr("lustro.cli.refractory_elapsed", lambda *args, **kwargs: True)
+    monkeypatch.setattr("lustro.relevance.get_receptor_signal_ratio", lambda *args, **kwargs: 1.0)
     monkeypatch.setattr("lustro.log.rotate_log", lambda *args: None)
     monkeypatch.setattr("lustro.log.load_title_prefixes", lambda _p: set())
     monkeypatch.setattr("lustro.log.is_junk", lambda _t: False)
     monkeypatch.setattr("lustro.log.format_markdown", lambda *args: "# News")
     monkeypatch.setattr("lustro.log.append_to_log", lambda *args: None)
-    monkeypatch.setattr("lustro.fetcher.archive_article", lambda *args: None)
+    monkeypatch.setattr("lustro.fetcher.archive_cargo", lambda *args: None)
 
     # Run once for fallback success
     _call_fetch_locked(mock_cfg, no_archive=True)
@@ -71,8 +71,8 @@ def test_fetch_fallback_and_zeros(monkeypatch, mock_cfg, capsys):
     stderr = capsys.readouterr().err
     assert "falling back to web" in stderr.lower()
 
-    # 2. Mock fetch_web to return nothing to test zeros
-    monkeypatch.setattr("lustro.fetcher.fetch_web", lambda _url, **kwargs: [])
+    # 2. Mock internalize_web to return nothing to test zeros
+    monkeypatch.setattr("lustro.fetcher.internalize_web", lambda _url, **kwargs: [])
 
     # Run 5 times to see the warning
     for i in range(5):

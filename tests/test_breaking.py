@@ -99,8 +99,8 @@ def test_cross_source_dedup_in_run(monkeypatch, xdg_env, capsys):
             }
         ]
 
-    monkeypatch.setattr("lustro.breaking.fetch_rss", mock_fetch_rss)
-    monkeypatch.setattr("lustro.breaking.fetch_web", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("lustro.breaking.internalize_rss", mock_fetch_rss)
+    monkeypatch.setattr("lustro.breaking.internalize_web", lambda *_args, **_kwargs: [])
 
     cfg = load_config()
     exit_code = run_breaking(cfg=cfg, dry_run=True)
@@ -155,7 +155,7 @@ def test_cmd_breaking_dry_run(monkeypatch, xdg_env, capsys):
     )
 
     monkeypatch.setattr(
-        "lustro.breaking.fetch_rss",
+        "lustro.breaking.internalize_rss",
         lambda *_args, **_kwargs: [
             {
                 "title": "OpenAI launches GPT-5 family",
@@ -169,7 +169,7 @@ def test_cmd_breaking_dry_run(monkeypatch, xdg_env, capsys):
             },
         ],
     )
-    monkeypatch.setattr("lustro.breaking.fetch_web", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("lustro.breaking.internalize_web", lambda *_args, **_kwargs: [])
 
     cfg = load_config()
     exit_code = run_breaking(cfg=cfg, dry_run=True)

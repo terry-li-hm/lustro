@@ -9,7 +9,7 @@ from typing import Optional
 import typer
 
 from lustro.config import LustroConfig, default_sources_text, load_config
-from lustro.state import load_state, lockfile, should_fetch
+from lustro.state import load_state, lockfile, refractory_elapsed
 
 app = typer.Typer(help="Lustro — AI news aggregator")
 
@@ -81,7 +81,11 @@ _CADENCE_LOOKBACK: dict[str, int] = {
 
 
 def _source_since_date(
-    state: dict[str, str], name: str, fallback: str, cadence: str = "daily", now: datetime | None = None
+    state: dict[str, str],
+    name: str,
+    fallback: str,
+    cadence: str = "daily",
+    now: datetime | None = None,
 ) -> str:
     """Per-source since_date: own last-scan timestamp, or cadence-appropriate lookback for new sources."""
     val = state.get(name)
@@ -111,7 +115,16 @@ def fetch(
 
 def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
     state = load_state(cfg.state_path)
-    from lustro.fetcher import archive_article, fetch_json_api, fetch_linkedin_company, fetch_rss, fetch_web, fetch_x_account, fetch_x_bookmarks, unbookmark_tweets
+    from lustro.fetcher import (
+        archive_cargo,
+        internalize_json_api,
+        internalize_linkedin,
+        internalize_rss,
+        internalize_web,
+        internalize_x_account,
+        internalize_x_bookmarks,
+        unbookmark_tweets,
+    )
     from lustro.log import (
         _title_prefix,
         append_to_log,
@@ -120,7 +133,7 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
         load_title_prefixes,
         rotate_log,
     )
-    from lustro.relevance import get_source_signal_ratio, log_score, score_item
+    from lustro.relevance import get_receptor_signal_ratio, log_affinity, score_cargo
     from lustro.state import save_state
 
     now = datetime.now(timezone.utc)
@@ -147,8 +160,8 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
         # Receptor downregulation: measure the source's signal-to-noise ratio
         # and extend the refractory period for chronically noisy sources so the
         # cell is not flooded with irrelevant ligands.
-        signal_ratio = get_source_signal_ratio(name)
-        if not should_fetch(state, name, cadence, now=now, signal_ratio=signal_ratio):
+        signal_ratio = get_receptor_signal_ratio(name)
+        if not refractory_elapsed(state, name, cadence, now=now, signal_ratio=signal_ratio):
             typer.echo(f"Skipping: {name} (cadence)", err=True)
             continue
 
@@ -156,9 +169,9 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
         fetch_failed = False
         since_date = _source_since_date(state, name, global_since_date, cadence=cadence, now=now)
         if source.get("bookmarks"):
-            articles = fetch_x_bookmarks(since_date, bird_path=cfg.resolve_bird())
+            articles = internalize_x_bookmarks(since_date, bird_path=cfg.resolve_bird())
         elif "api" in source:
-            articles = fetch_json_api(
+            articles = internalize_json_api(
                 source["api"],
                 since_date,
                 title_key=source.get("api_title_key", "title"),
@@ -170,7 +183,7 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
                 failed_sources.append(f"{name} (json api error)")
                 articles = []
         elif "rss" in source:
-            articles = fetch_rss(
+            articles = internalize_rss(
                 source["rss"],
                 since_date,
                 full_fetch=bool(source.get("full_fetch", False)),
@@ -180,7 +193,7 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
             if articles is None:
                 if "url" in source:
                     typer.echo(f"  RSS dead, falling back to web: {source['url']}", err=True)
-                    articles = fetch_web(
+                    articles = internalize_web(
                         source["url"],
                         selector=source.get("selector"),
                         stealth=bool(source.get("stealth_web", False)),
@@ -191,9 +204,9 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
                     failed_sources.append(f"{name} (RSS dead)")
             articles = articles or []
         elif "handle" in source:
-            articles = fetch_x_account(source["handle"], since_date, bird_path=cfg.resolve_bird())
+            articles = internalize_x_account(source["handle"], since_date, bird_path=cfg.resolve_bird())
         elif "linkedin" in source:
-            articles = fetch_linkedin_company(
+            articles = internalize_linkedin(
                 source["linkedin"],
                 since_date,
                 agent_browser_bin=cfg.config_data.get("agent_browser_bin", "agent-browser"),
@@ -203,7 +216,7 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
                 failed_sources.append(f"{name} (linkedin error)")
                 articles = []
         else:
-            articles = fetch_web(
+            articles = internalize_web(
                 source.get("url", ""),
                 selector=source.get("selector"),
                 stealth=bool(source.get("stealth_web", False)),
@@ -229,7 +242,7 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
             title_prefixes.add(prefix)
 
         for article in new_articles:
-            scores = score_item(
+            scores = score_cargo(
                 article.get("title", ""),
                 name,
                 article.get("summary", ""),
@@ -239,12 +252,12 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
             article["score"] = str(scores.get("score", 0))
             article["banking_angle"] = str(scores.get("banking_angle", ""))
             article["talking_point"] = str(scores.get("talking_point", ""))
-            log_score(article, scores)
+            log_affinity(article, scores)
 
         if not no_archive:
             for article in new_articles:
                 if article.get("link") and tier == 1:
-                    archive_article(article, name, tier, cfg.article_cache_dir, now)
+                    archive_cargo(article, name, tier, cfg.article_cache_dir, now)
                     archived_count += 1
 
         if source.get("bookmarks"):
@@ -263,7 +276,13 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
             z_key = f"_zeros:{name}"
             zeros = int(state.get(z_key, 0)) + 1
             state[z_key] = str(zeros)
-            _zero_threshold = {"daily": 5, "twice_weekly": 4, "weekly": 3, "biweekly": 3, "monthly": 5}.get(cadence, 5)
+            _zero_threshold = {
+                "daily": 5,
+                "twice_weekly": 4,
+                "weekly": 3,
+                "biweekly": 3,
+                "monthly": 5,
+            }.get(cadence, 5)
             if zeros >= _zero_threshold:
                 typer.echo(
                     f"  Warning: {name} has {zeros} consecutive zero-article fetches",
@@ -281,6 +300,7 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
     # Only store + transcytose cargo survives to the news log; degrade cargo
     # is silently dropped (lysosomal fate — not persisted).
     from lustro.sorting import filter_for_log
+
     sorted_results: dict[str, list[dict[str, str]]] = {}
     degraded_count = 0
     for source_name, source_articles in results.items():
@@ -311,12 +331,14 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
 def check() -> None:
     cfg = load_config()
     state = load_state(cfg.state_path)
-    from lustro.fetcher import check_sources
+    from lustro.fetcher import check_receptors
 
     web_sources = [s for s in cfg.sources if "handle" not in s and not s.get("bookmarks")]
     x_accounts = [s for s in cfg.sources if "handle" in s]
     x_bookmarks = [s for s in cfg.sources if s.get("bookmarks")]
-    check_sources(web_sources, x_accounts, state, bird_path=cfg.resolve_bird(), x_bookmarks=x_bookmarks)
+    check_receptors(
+        web_sources, x_accounts, state, bird_path=cfg.resolve_bird(), x_bookmarks=x_bookmarks
+    )
     raise typer.Exit(code=0)
 
 
@@ -327,8 +349,34 @@ def digest(
     themes: Optional[int] = typer.Option(None, "--themes", help="Max themes"),
     model: Optional[str] = typer.Option(None, "--model", help="Model ID"),
     tag: Optional[list[str]] = typer.Option(None, "--tag", "-t", help="Filter by tag (repeatable)"),
+    weekly: bool = typer.Option(
+        False,
+        "--weekly",
+        help="Secrete weekly digest (past 7 days, no LLM — pure score-based endosome sorting)",
+    ),
 ) -> None:
     cfg = load_config()
+
+    # Weekly secretion pathway: lightweight, no LLM, matches Sunday-night schedule.
+    # Substrate was already scored during fetch; this is pure membrane secretion.
+    if weekly:
+        from lustro.digest import run_weekly_digest
+
+        try:
+            item_count, output_path = run_weekly_digest(
+                cfg=cfg,
+                tags=tag or [],
+            )
+        except Exception as exc:
+            typer.echo(f"Error: {exc}", err=True)
+            raise typer.Exit(code=1)
+
+        typer.echo(f"Weekly digest: {item_count} items above threshold.", err=True)
+        if output_path is not None:
+            typer.echo(f"Written: {output_path}", err=True)
+        raise typer.Exit(code=0)
+
+    # Monthly thematic digest pathway: LLM-powered theme identification.
     from lustro.digest import run_digest
 
     try:
@@ -474,12 +522,14 @@ def sources(
 
 @app.command()
 def relevance(
-    top: Optional[int] = typer.Option(None, "--top", help="Show top N highest-scored items from the last 7 days"),
+    top: Optional[int] = typer.Option(
+        None, "--top", help="Show top N highest-scored items from the last 7 days"
+    ),
 ) -> None:
-    from lustro.relevance import get_stats, get_top_items
+    from lustro.relevance import get_affinity_stats, get_top_cargo
 
     if top is not None:
-        items = get_top_items(limit=top)
+        items = get_top_cargo(limit=top)
         if not items:
             typer.echo("No recent relevance data found.")
             raise typer.Exit(code=0)
@@ -494,7 +544,7 @@ def relevance(
             typer.echo(line)
         raise typer.Exit(code=0)
 
-    stats = get_stats()
+    stats = get_affinity_stats()
     if stats.get("status") == "insufficient_data":
         typer.echo("Relevance stats unavailable: insufficient_data")
         raise typer.Exit(code=0)

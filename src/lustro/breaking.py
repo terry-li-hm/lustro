@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from lustro.config import LustroConfig
-from lustro.fetcher import fetch_rss, fetch_web
+from lustro.fetcher import internalize_rss, internalize_web
 from lustro.log import append_to_log
 from lustro.state import lockfile
 
@@ -57,7 +57,9 @@ NEGATIVE = re.compile(
 BREAKING_FRESHNESS_HOURS = 2
 
 
-def _article_is_fresh(article: dict[str, Any], now: datetime, max_hours: float = BREAKING_FRESHNESS_HOURS) -> bool:
+def _article_is_fresh(
+    article: dict[str, Any], now: datetime, max_hours: float = BREAKING_FRESHNESS_HOURS
+) -> bool:
     """Return True if the article was published within ``max_hours`` of ``now``.
 
     Reads the ``published_at`` field (ISO 8601 UTC string) added by
@@ -324,12 +326,12 @@ def _run_breaking_locked(
     for source in _source_candidates(cfg):
         source_name = str(source.get("name", "Unknown Source"))
         if source.get("rss"):
-            articles = fetch_rss(str(source["rss"]), since_date, max_items=10)
+            articles = internalize_rss(str(source["rss"]), since_date, max_items=10)
             if articles is None and source.get("url"):
-                articles = fetch_web(str(source["url"]), max_items=8)
+                articles = internalize_web(str(source["url"]), max_items=8)
             articles = articles or []
         else:
-            articles = fetch_web(str(source.get("url", "")), max_items=8)
+            articles = internalize_web(str(source.get("url", "")), max_items=8)
 
         for article in articles:
             title = str(article.get("title", "")).strip()
@@ -377,7 +379,14 @@ def _run_breaking_locked(
                         suppressed_stale=True,
                     )
                     continue
-                matches.append({"title": title, "link": link, "source": source_name, "published_at": published_at})
+                matches.append(
+                    {
+                        "title": title,
+                        "link": link,
+                        "source": source_name,
+                        "published_at": published_at,
+                    }
+                )
 
     if len(seen_list) > MAX_SEEN_IDS:
         seen_list = seen_list[-MAX_SEEN_IDS:]

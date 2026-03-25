@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from lustro.fetcher import archive_article, fetch_rss, fetch_web, fetch_x_account, fetch_x_bookmarks, unbookmark_tweets
+from lustro.fetcher import archive_cargo, internalize_rss, internalize_web, internalize_x_account, internalize_x_bookmarks, unbookmark_tweets
 
 
 class Entry(dict):
@@ -35,7 +35,7 @@ def test_fetch_rss(monkeypatch):
         lambda _url, request_headers: SimpleNamespace(entries=entries, bozo=False),
     )
 
-    articles = fetch_rss("https://example.com/feed.xml", "2026-02-23")
+    articles = internalize_rss("https://example.com/feed.xml", "2026-02-23")
 
     assert len(articles) == 1
     assert articles[0]["title"] == "New post"
@@ -49,7 +49,7 @@ def test_fetch_rss_dead_feed(monkeypatch):
         lambda _url, request_headers: SimpleNamespace(bozo=True, status=404),
     )
 
-    articles = fetch_rss("https://example.com/dead.xml", "2026-02-23")
+    articles = internalize_rss("https://example.com/dead.xml", "2026-02-23")
     assert articles is None
 
 
@@ -68,14 +68,14 @@ def test_fetch_web(monkeypatch):
 
     monkeypatch.setattr("lustro.fetcher.requests.get", lambda *args, **kwargs: FakeResp())
 
-    articles = fetch_web("https://example.com")
+    articles = internalize_web("https://example.com")
 
     assert len(articles) == 1
     assert articles[0]["title"] == "A proper article title here"
     assert articles[0]["link"] == "https://example.com/p/new"
 
 
-def test_archive_article(monkeypatch, tmp_path):
+def test_archive_cargo(monkeypatch, tmp_path):
     full_text = (
         "This is the full text body of a substantial article about recent advances "
         "in artificial intelligence research and its implications for the industry."
@@ -91,7 +91,7 @@ def test_archive_article(monkeypatch, tmp_path):
     }
     now = datetime(2026, 2, 24, 12, 30, tzinfo=timezone.utc)
 
-    archive_article(article, "Example Source", 1, tmp_path, now)
+    archive_cargo(article, "Example Source", 1, tmp_path, now)
 
     files = list(tmp_path.glob("*.json"))
     assert len(files) == 1
@@ -124,7 +124,7 @@ def test_fetch_x_account(monkeypatch):
 
     monkeypatch.setattr("lustro.fetcher.subprocess.run", fake_run)
 
-    articles = fetch_x_account("@alice", "2026-02-23")
+    articles = internalize_x_account("@alice", "2026-02-23")
 
     assert len(articles) == 1
     assert articles[0]["date"] == "2026-02-24"
@@ -154,7 +154,7 @@ def test_fetch_x_bookmarks(monkeypatch):
 
     monkeypatch.setattr("lustro.fetcher.subprocess.run", fake_run)
 
-    articles = fetch_x_bookmarks("2026-02-23")
+    articles = internalize_x_bookmarks("2026-02-23")
 
     assert len(articles) == 1
     assert articles[0]["date"] == "2026-02-25"
@@ -180,7 +180,7 @@ def test_unbookmark_tweets(monkeypatch):
 
 
 def test_check_sources_zeros(monkeypatch, capsys):
-    from lustro.fetcher import check_sources
+    from lustro.fetcher import check_receptors
 
     sources = [{"name": "ZeroSource", "tier": 1, "url": "https://example.com"}]
     state = {"_zeros:ZeroSource": "3"}
@@ -194,6 +194,6 @@ def test_check_sources_zeros(monkeypatch, capsys):
 
     monkeypatch.setattr("lustro.fetcher.requests.get", lambda *args, **kwargs: FakeResp())
 
-    check_sources(sources, [], state, now=now)
+    check_receptors(sources, [], state, now=now)
     stderr = capsys.readouterr().err
     assert "(3x0)" in stderr

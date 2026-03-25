@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +11,12 @@ from lustro.config import LustroConfig
 
 DEFAULT_THEME_COUNT = 8
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+# Score thresholds for weekly digest secretion.
+# Transcytose (★): cargo crosses the membrane and reaches the client surface.
+WEEKLY_TRANSCYTOSE_THRESHOLD = 7
+# Store: cargo retained in the endosome for later reference.
+WEEKLY_STORE_THRESHOLD = 5
 
 
 def _resolve_month(month: str | None) -> str:
@@ -269,6 +275,284 @@ def _filter_by_tags(
         item for item in items
         if tag_set & set(source_tags.get(item.get(source_key, ""), ["ai"]))
     ]
+
+
+# ---------------------------------------------------------------------------
+# Weekly digest — lightweight endosome sorting, no LLM required.
+# Substrate was already scored during fetch; this is pure membrane secretion.
+# ---------------------------------------------------------------------------
+
+
+def _resolve_week_label(week_date: datetime | None = None) -> tuple[str, str, str]:
+    """Return (iso_date_start, iso_date_end, week_label) for the past 7 days.
+
+    week_date: anchor datetime (defaults to now). The window is [anchor-7d, anchor].
+    week_label format: YYYY-WNN (ISO year + zero-padded ISO week number).
+    """
+    if week_date is None:
+        week_date = datetime.now(timezone.utc)
+    end_date = week_date
+    start_date = end_date - timedelta(days=7)
+    # ISO week label — use the end date's ISO calendar to label the digest
+    iso_year, iso_week, _ = end_date.isocalendar()
+    week_label = f"{iso_year}-W{iso_week:02d}"
+    return (
+        start_date.strftime("%Y-%m-%d"),
+        end_date.strftime("%Y-%m-%d"),
+        week_label,
+    )
+
+
+def load_log_entries_since(log_path: Path, since_date: str) -> list[dict[str, str]]:
+    """Internalize log entries from since_date (inclusive) to present.
+
+    Parses the markdown log format written by lustro.log.format_markdown.
+    Returns a list of dicts with: title, source, date, link, banking_angle,
+    summary, _transcytose ('1' if item was marked with [★], else '0').
+    """
+    if not log_path.exists():
+        return []
+
+    entries: list[dict[str, str]] = []
+    current_date = ""
+    current_source = ""
+
+    for line in log_path.read_text(encoding="utf-8").splitlines():
+        date_match = re.match(r"^## (\d{4}-\d{2}-\d{2})", line)
+        if date_match:
+            current_date = date_match.group(1)
+            continue
+
+        source_match = re.match(r"^### (.+)", line)
+        if source_match:
+            current_source = source_match.group(1).strip()
+            continue
+
+        if current_date < since_date:
+            continue
+
+        # Parse article line: - [★] **[title](link)** (banking_angle: ...) (date) — summary
+        article_match = re.match(
+            r"^- (?:\[★\] )?\*\*(?:\[([^\]]+)\]\(([^)]+)\)|([^*]+))\*\*"
+            r"(?:\s*\(banking_angle: ([^)]+)\))?"
+            r"(?:\s*\(([^)]*)\))?"
+            r"(?:\s*—\s*(.+))?",
+            line,
+        )
+        if article_match:
+            title = (article_match.group(1) or article_match.group(3) or "").strip()
+            if not title:
+                continue
+            transcytose = "[★]" in line
+            entries.append(
+                {
+                    "title": title,
+                    "source": current_source,
+                    "date": article_match.group(5) or current_date,
+                    "link": article_match.group(2) or "",
+                    "banking_angle": article_match.group(4) or "",
+                    "summary": article_match.group(6) or "",
+                    # Reconstruct approximate score from transcytose marker:
+                    # ★ items were logged at score >= WEEKLY_TRANSCYTOSE_THRESHOLD
+                    "_transcytose": "1" if transcytose else "0",
+                }
+            )
+    return entries
+
+
+def load_affinity_entries_since(since_date: str) -> list[dict[str, Any]]:
+    """Load scored cargo from the affinity log for the weekly window.
+
+    Affinity log has richer metadata (score, banking_angle, talking_point)
+    than the markdown log. Used to enrich weekly digest items.
+    """
+    from lustro.relevance import AFFINITY_LOG, _read_jsonl
+
+    cutoff = datetime.strptime(since_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    items: list[dict[str, Any]] = []
+    for entry in _read_jsonl(AFFINITY_LOG):
+        raw_ts = entry.get("timestamp", "")
+        try:
+            ts = datetime.fromisoformat(str(raw_ts))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            continue
+        if ts >= cutoff:
+            items.append(entry)
+    return items
+
+
+def _build_affinity_index(affinity_entries: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Index affinity log entries by title for O(1) enrichment lookups."""
+    index: dict[str, dict[str, Any]] = {}
+    for entry in affinity_entries:
+        title = str(entry.get("title", "")).strip()
+        if title and title not in index:
+            index[title] = entry
+    return index
+
+
+def write_weekly_digest(
+    output_path: Path,
+    week_label: str,
+    since_date: str,
+    until_date: str,
+    entries: list[dict[str, str]],
+    affinity_index: dict[str, dict[str, Any]],
+) -> Path:
+    """Secrete the weekly digest to markdown.
+
+    Groups entries by source. Transcytose items (★) are surfaced first with
+    banking_angle and talking_point for client conversations.
+    Items with score < WEEKLY_STORE_THRESHOLD from the affinity log are omitted
+    (lysosomal fate — degraded, not secreted).
+    """
+    now = datetime.now().astimezone()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Separate transcytose (★) items for the headline section
+    transcytose_entries = [e for e in entries if e.get("_transcytose") == "1"]
+
+    # Group all entries by source, filtering by score threshold
+    by_source: dict[str, list[dict[str, str]]] = {}
+    for entry in entries:
+        title = entry["title"]
+        # Look up score in affinity index; fall back to transcytose marker
+        affinity = affinity_index.get(title, {})
+        score = int(affinity.get("score", 0))
+        if score == 0 and entry.get("_transcytose") == "1":
+            # ★ items scored >= 7 at log time; use threshold as floor
+            score = WEEKLY_TRANSCYTOSE_THRESHOLD
+        if score < WEEKLY_STORE_THRESHOLD:
+            # Low-signal cargo: lysosomal fate, not secreted in weekly digest
+            continue
+        source = entry.get("source", "Unknown")
+        by_source.setdefault(source, []).append({**entry, "_score": str(score)})
+
+    # Sort each source's entries by score descending
+    for source in by_source:
+        by_source[source].sort(key=lambda e: int(e.get("_score", "0")), reverse=True)
+
+    lines: list[str] = [
+        f"# Weekly AI Digest — {week_label}",
+        "",
+        f"Period: {since_date} to {until_date}",
+        f"Generated: {now.strftime('%Y-%m-%d %H:%M %Z')}",
+        "",
+        "---",
+        "",
+    ]
+
+    # Headline section: transcytose items surface to the client membrane first
+    if transcytose_entries:
+        lines.append("## Transcytose — High Signal (score >= 7)")
+        lines.append("")
+        lines.append(
+            "_Items that crossed the membrane: ready for client conversation._"
+        )
+        lines.append("")
+        for entry in transcytose_entries:
+            title = entry["title"]
+            link = entry.get("link", "")
+            source = entry.get("source", "")
+            affinity = affinity_index.get(title, {})
+            banking_angle = entry.get("banking_angle") or str(
+                affinity.get("banking_angle", "")
+            )
+            talking_point = str(affinity.get("talking_point", ""))
+            title_md = f"[{title}]({link})" if link else title
+            lines.append(f"- **{title_md}** — _{source}_")
+            if banking_angle and banking_angle not in ("N/A", ""):
+                lines.append(f"  - Banking angle: {banking_angle}")
+            if talking_point and talking_point not in ("N/A", ""):
+                lines.append(f"  - Talking point: {talking_point}")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+
+    # Per-source sections: grouped cargo
+    if by_source:
+        lines.append("## By Source")
+        lines.append("")
+        for source, source_entries in sorted(by_source.items()):
+            lines.append(f"### {source}")
+            lines.append("")
+            for entry in source_entries:
+                title = entry["title"]
+                link = entry.get("link", "")
+                score = entry.get("_score", "0")
+                marker = "★ " if entry.get("_transcytose") == "1" else ""
+                title_md = f"[{title}]({link})" if link else title
+                summary = entry.get("summary", "")
+                summary_part = f" — {summary}" if summary else ""
+                lines.append(f"- {marker}**{title_md}** [{score}/10]{summary_part}")
+            lines.append("")
+    else:
+        lines.append("_No items met the score threshold this week._")
+        lines.append("")
+
+    # Scheduling note: wire for Sunday night so Monday brief has fresh signal
+    lines.extend([
+        "---",
+        "",
+        "<!-- Schedule: run Sunday ~22:00 HKT so Monday morning brief has fresh signal -->",
+        "<!-- Command: lustro digest --weekly -->",
+        "",
+    ])
+
+    output_path.write_text("\n".join(lines), encoding="utf-8")
+    return output_path
+
+
+def run_weekly_digest(
+    cfg: LustroConfig,
+    week_date: datetime | None = None,
+    tags: list[str] | None = None,
+) -> tuple[int, Path | None]:
+    """Secrete the weekly digest — lightweight endosome sorting, no LLM call.
+
+    Returns (item_count, output_path). No LLM is used: scoring was already
+    performed during fetch. This is pure membrane secretion from cached signal.
+    """
+    since_date, until_date, week_label = _resolve_week_label(week_date)
+
+    # Internalize log entries for the window
+    entries = load_log_entries_since(cfg.log_path, since_date)
+
+    if tags:
+        source_tags = _build_source_tags_map(cfg)
+        entries = [
+            e for e in entries
+            if set(tags) & set(source_tags.get(e.get("source", ""), ["ai"]))
+        ]
+
+    # Enrich with affinity log for score + talking_point data
+    affinity_entries = load_affinity_entries_since(since_date)
+    affinity_index = _build_affinity_index(affinity_entries)
+
+    # Secrete to ~/notes/Reference/weekly-ai-digest-YYYY-WNN.md
+    output_dir = Path.home() / "notes" / "Reference"
+    output_path = output_dir / f"weekly-ai-digest-{week_label}.md"
+
+    written_path = write_weekly_digest(
+        output_path=output_path,
+        week_label=week_label,
+        since_date=since_date,
+        until_date=until_date,
+        entries=entries,
+        affinity_index=affinity_index,
+    )
+
+    # Count items that made it through the score threshold
+    item_count = sum(
+        1 for e in entries
+        if (
+            int(affinity_index.get(e["title"], {}).get("score", 0)) >= WEEKLY_STORE_THRESHOLD
+            or e.get("_transcytose") == "1"
+        )
+    )
+    return item_count, written_path
 
 
 def run_digest(

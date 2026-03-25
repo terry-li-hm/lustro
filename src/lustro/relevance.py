@@ -10,11 +10,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, os.path.join(os.path.expanduser("~"), "reticulum", "lib"))
+sys.path.insert(0, os.path.join(os.path.expanduser("~"), "code", "vivesca", "lib"))
 from llm import query as _llm_query
 
-RELEVANCE_LOG = Path.home() / ".cache" / "lustro" / "relevance.jsonl"
-ENGAGEMENT_LOG = Path.home() / ".cache" / "lustro" / "engagement.jsonl"
+AFFINITY_LOG = Path.home() / ".cache" / "lustro" / "relevance.jsonl"
+RECYCLING_LOG = Path.home() / ".cache" / "lustro" / "engagement.jsonl"
 
 SCORING_PROMPT = """Rate this AI news item for relevance to a Principal Consultant / AI Solution Lead
 advising bank clients. Score 1-10:
@@ -38,8 +38,8 @@ Respond in JSON only:
 """
 
 
-def score_item(title: str, source: str, summary: str) -> dict[str, Any]:
-    """Score a single news item using Gemini, with keyword fallback."""
+def score_cargo(title: str, source: str, summary: str) -> dict[str, Any]:
+    """Score a single cargo item using Gemini, with keyword fallback."""
     prompt = SCORING_PROMPT.format(title=title, source=source, summary=summary)
 
     try:
@@ -90,8 +90,8 @@ def _engagement_boost(title: str, source: str) -> int:
         -1 if the source is a false-positive emitter (scored >=7 repeatedly, never engaged),
          0 otherwise.
     """
-    scored_rows = _read_jsonl(RELEVANCE_LOG)
-    engaged_rows = _read_jsonl(ENGAGEMENT_LOG)
+    scored_rows = _read_jsonl(AFFINITY_LOG)
+    engaged_rows = _read_jsonl(RECYCLING_LOG)
 
     if not scored_rows:
         return 0
@@ -109,12 +109,10 @@ def _engagement_boost(title: str, source: str) -> int:
 
     # False-positive signal: source has >=2 high-scored items (score>=7) with zero engagement
     source_high_scored = [
-        r for r in scored_rows
-        if str(r.get("source", "")) == source and int(r.get("score", 0)) >= 7
+        r for r in scored_rows if str(r.get("source", "")) == source and int(r.get("score", 0)) >= 7
     ]
     source_high_engaged_count = sum(
-        1 for r in source_high_scored
-        if str(r.get("title", "")) in engaged_titles
+        1 for r in source_high_scored if str(r.get("title", "")) in engaged_titles
     )
     if len(source_high_scored) >= 2 and source_high_engaged_count == 0:
         return -1
@@ -123,7 +121,7 @@ def _engagement_boost(title: str, source: str) -> int:
 
 
 def _keyword_score(title: str, summary: str, source: str = "") -> dict[str, Any]:
-    """Simple keyword-based relevance scoring as fallback.
+    """Simple keyword-based affinity scoring as fallback.
 
     Applies receptor recycling via _engagement_boost so the deterministic
     fallback accumulates affinity signal over time without needing the LLM.
@@ -190,9 +188,9 @@ def _keyword_score(title: str, summary: str, source: str = "") -> dict[str, Any]
     return {"score": score, "banking_angle": "N/A", "talking_point": "N/A"}
 
 
-def log_score(item: dict[str, Any], scores: dict[str, Any]) -> None:
-    """Append scored item to the relevance log."""
-    RELEVANCE_LOG.parent.mkdir(parents=True, exist_ok=True)
+def log_affinity(item: dict[str, Any], scores: dict[str, Any]) -> None:
+    """Append scored cargo to the affinity log."""
+    AFFINITY_LOG.parent.mkdir(parents=True, exist_ok=True)
     entry = {
         "timestamp": item.get("timestamp", ""),
         "title": item.get("title", ""),
@@ -201,19 +199,19 @@ def log_score(item: dict[str, Any], scores: dict[str, Any]) -> None:
         "banking_angle": scores.get("banking_angle", ""),
         "talking_point": scores.get("talking_point", ""),
     }
-    with RELEVANCE_LOG.open("a", encoding="utf-8") as fh:
+    with AFFINITY_LOG.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-def log_engagement(title: str, action: str = "deepened") -> None:
-    """Log when the user engages with an item."""
-    ENGAGEMENT_LOG.parent.mkdir(parents=True, exist_ok=True)
+def log_recycling(title: str, action: str = "deepened") -> None:
+    """Log when the user engages with cargo (endosomal recycling signal)."""
+    RECYCLING_LOG.parent.mkdir(parents=True, exist_ok=True)
     entry = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "title": title,
         "action": action,
     }
-    with ENGAGEMENT_LOG.open("a", encoding="utf-8") as fh:
+    with RECYCLING_LOG.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
@@ -233,7 +231,7 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def get_source_signal_ratio(source: str, window_days: int = 30) -> float:
+def get_receptor_signal_ratio(source: str, window_days: int = 30) -> float:
     """Measure the signal-to-noise ratio for a receptor (source) over a time window.
 
     Receptors chronically overstimulated by low-relevance ligands (articles)
@@ -247,7 +245,7 @@ def get_source_signal_ratio(source: str, window_days: int = 30) -> float:
     cutoff = datetime.now(timezone.utc) - timedelta(days=window_days)
     total = 0
     signal = 0
-    for entry in _read_jsonl(RELEVANCE_LOG):
+    for entry in _read_jsonl(AFFINITY_LOG):
         if entry.get("source") != source:
             continue
         raw_timestamp = entry.get("timestamp")
@@ -272,18 +270,24 @@ def get_source_signal_ratio(source: str, window_days: int = 30) -> float:
     return signal / total
 
 
-def get_stats() -> dict[str, Any]:
-    """Analyse relevance vs engagement to find scoring gaps."""
-    scored_rows = _read_jsonl(RELEVANCE_LOG)
-    engaged_rows = _read_jsonl(ENGAGEMENT_LOG)
+def get_affinity_stats() -> dict[str, Any]:
+    """Analyse affinity vs recycling to find scoring gaps."""
+    scored_rows = _read_jsonl(AFFINITY_LOG)
+    engaged_rows = _read_jsonl(RECYCLING_LOG)
     if not scored_rows or not engaged_rows:
         return {"status": "insufficient_data"}
 
-    scored = {str(entry.get("title", "")): int(entry.get("score", 0)) for entry in scored_rows if entry.get("title")}
+    scored = {
+        str(entry.get("title", "")): int(entry.get("score", 0))
+        for entry in scored_rows
+        if entry.get("title")
+    }
     engaged = {str(entry.get("title", "")) for entry in engaged_rows if entry.get("title")}
 
     false_negatives = sorted(title for title in engaged if scored.get(title, 5) < 5)
-    false_positives = sorted(title for title, score in scored.items() if score >= 7 and title not in engaged)
+    false_positives = sorted(
+        title for title, score in scored.items() if score >= 7 and title not in engaged
+    )
 
     return {
         "status": "ok",
@@ -295,11 +299,11 @@ def get_stats() -> dict[str, Any]:
     }
 
 
-def get_top_items(limit: int = 10, days: int = 7) -> list[dict[str, Any]]:
-    """Return the highest-scored items in the recent window."""
+def get_top_cargo(limit: int = 10, days: int = 7) -> list[dict[str, Any]]:
+    """Return the highest-scored cargo in the recent window."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     items: list[dict[str, Any]] = []
-    for entry in _read_jsonl(RELEVANCE_LOG):
+    for entry in _read_jsonl(AFFINITY_LOG):
         raw_timestamp = entry.get("timestamp")
         try:
             timestamp = datetime.fromisoformat(str(raw_timestamp))

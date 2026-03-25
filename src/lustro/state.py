@@ -72,14 +72,14 @@ def save_state(path: Path, state: Mapping[str, str]) -> None:
             os.unlink(tmp_name)
 
 
-def should_fetch(
+def refractory_elapsed(
     state: Mapping[str, str],
     source_name: str,
     cadence: str,
     now: datetime | None = None,
     signal_ratio: float = 1.0,
 ) -> bool:
-    """Decide whether to fetch a source, applying receptor downregulation.
+    """Decide whether a receptor's refractory period has elapsed, applying downregulation.
 
     A source that chronically emits low-relevance content is treated like an
     overstimulated receptor: it internalizes (downregulates) by extending its
@@ -94,9 +94,9 @@ def should_fetch(
 
     # Receptor downregulation: extend refractory period for noisy sources
     if signal_ratio < 0.2:
-        cadence_days += 7   # high noise — receptor internalized
+        cadence_days += 7  # high noise — receptor internalized
     elif signal_ratio < 0.5:
-        cadence_days += 2   # moderate noise — partial downregulation
+        cadence_days += 2  # moderate noise — partial downregulation
 
     last_seen_raw = state.get(source_name)
     if not last_seen_raw:

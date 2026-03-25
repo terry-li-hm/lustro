@@ -1,127 +1,57 @@
 web_sources:
-  - name: Simon Willison
-    tier: 1
-    cadence: daily
-    tags: [ai]
-    rss: https://simonwillison.net/atom/everything/
-    url: https://simonwillison.net/
-
-  - name: Hacker News Front Page
-    tier: 1
-    cadence: daily
-    tags: [ai, tech]
-    rss: https://hnrss.org/frontpage
-    url: https://news.ycombinator.com/
-
-  - name: The Batch
-    tier: 1
-    cadence: weekly
-    tags: [ai]
-    rss: https://www.deeplearning.ai/the-batch/feed/
-    url: https://www.deeplearning.ai/the-batch/
-
-  - name: Import AI
-    tier: 1
-    cadence: weekly
-    tags: [ai]
-    rss: https://jack-clark.net/feed/
-    url: https://jack-clark.net/
-
-  - name: Ahead of AI
-    tier: 1
-    cadence: weekly
-    tags: [ai]
-    rss: https://magazine.sebastianraschka.com/feed
-    url: https://magazine.sebastianraschka.com/
-
-  - name: Interconnects
-    tier: 1
-    cadence: weekly
-    tags: [ai]
-    rss: https://www.interconnects.ai/feed
-    url: https://www.interconnects.ai/
+  # --- Breaking / official announcements: daily endocytosis ---
+  # These receptors stay at high sensitivity — sources secrete ligands irregularly
+  # but each signal carries high membrane potential for client conversations.
 
   - name: Anthropic Blog
     tier: 1
-    cadence: twice_weekly
+    cadence: daily
     tags: [ai]
+    # Category: breaking/official — major lab announcements warrant daily polling
     rss: https://www.anthropic.com/news/rss.xml
     url: https://www.anthropic.com/news
 
   - name: OpenAI Blog
     tier: 1
-    cadence: weekly
+    cadence: daily
     tags: [ai]
+    # Category: breaking/official — model releases and policy updates
     rss: https://openai.com/news/rss.xml
     url: https://openai.com/news/
 
   - name: OpenAI Developer Blog
     tier: 1
-    cadence: weekly
+    cadence: daily
     tags: [ai]
+    # Category: breaking/official — API and tooling announcements
     # RSS dead (404) as of Feb 2026
     url: https://developers.openai.com/blog
 
-  - name: The Gradient
-    tier: 2
-    cadence: weekly
-    tags: [ai]
-    rss: https://thegradient.pub/rss/
-    url: https://thegradient.pub/
-
-  - name: MIT Technology Review AI
-    tier: 2
-    cadence: daily
-    tags: [ai, tech]
-    rss: https://www.technologyreview.com/feed/
-    url: https://www.technologyreview.com/topic/artificial-intelligence/
-
-  - name: Latent Space
-    tier: 2
-    cadence: weekly
-    tags: [ai]
-    rss: https://www.latent.space/feed
-    url: https://www.latent.space/
-
-  - name: AI Snake Oil
-    tier: 2
-    cadence: weekly
-    tags: [ai]
-    rss: https://aisnakeoil.substack.com/feed
-    url: https://aisnakeoil.substack.com/
-
   - name: Google DeepMind Blog
     tier: 2
-    cadence: weekly
+    cadence: daily
     tags: [ai]
+    # Category: breaking/official — major research and product announcements
     rss: https://deepmind.google/discover/blog/rss.xml
     url: https://deepmind.google/discover/blog/
 
-  - name: Hugging Face Blog
-    tier: 2
-    cadence: weekly
-    tags: [ai]
-    rss: https://huggingface.co/blog/feed.xml
-    url: https://huggingface.co/blog
+  # --- High-frequency news aggregators: daily endocytosis ---
+  # Sources that aggregate broadly — benefit from frequent polling even if
+  # individual items have variable signal. Processing empty endosomes is cheap.
 
-  - name: Stripe Engineering
-    tier: 2
-    cadence: weekly
-    tags: [tech]
-    rss: https://stripe.com/blog/feed.rss
-    url: https://stripe.com/blog/engineering
-
-  - name: GitHub Blog Engineering
-    tier: 2
-    cadence: weekly
-    tags: [tech]
-    rss: https://github.blog/engineering/feed/
-    url: https://github.blog/engineering/
+  - name: Hacker News Front Page
+    tier: 1
+    cadence: daily
+    tags: [ai, tech]
+    # Category: news aggregator — daily publication rhythm, high item velocity
+    rss: https://hnrss.org/frontpage
+    url: https://news.ycombinator.com/
 
   - name: InfoQ 中文 AI&大模型
     tier: 2
     cadence: daily
     tags: [ai]
+    # Category: news aggregator — publishes multiple items per day
     rss: https://rsshub.rssforever.com/infoq/topic/AI
     url: https://www.infoq.cn/topic/AI
 
@@ -129,6 +59,7 @@ web_sources:
     tier: 2
     cadence: daily
     tags: [ai]
+    # Category: news aggregator — high-volume daily Chinese AI coverage
     rss: http://localhost:8001/feed/3236757533.xml?k=${WECHAT2RSS_TOKEN}
     url: https://www.qbitai.com/
 
@@ -136,6 +67,7 @@ web_sources:
     tier: 2
     cadence: daily
     tags: [ai]
+    # Category: news aggregator — daily Chinese AI coverage
     rss: http://localhost:8001/feed/3271041950.xml?k=${WECHAT2RSS_TOKEN}
     url: https://www.xinzhiyuan.com/
 
@@ -143,5 +75,114 @@ web_sources:
     tier: 2
     cadence: daily
     tags: [ai]
+    # Category: news aggregator — daily Chinese AI/ML coverage
     rss: http://localhost:8001/feed/3073282833.xml?k=${WECHAT2RSS_TOKEN}
     url: https://www.jiqizhixin.com/
+
+  # --- Analysis / opinion: weekly metabolism ---
+  # These sources publish on weekly rhythms. Daily polling processes empty
+  # endosomes — match digestion rate to substrate arrival rate.
+
+  - name: Simon Willison
+    tier: 1
+    cadence: weekly
+    tags: [ai]
+    # Category: analysis/opinion — posts every few days, dense technical commentary
+    rss: https://simonwillison.net/atom/everything/
+    url: https://simonwillison.net/
+
+  - name: MIT Technology Review AI
+    tier: 2
+    cadence: weekly
+    tags: [ai, tech]
+    # Category: analysis/opinion — editorial pieces, not a real-time feed
+    rss: https://www.technologyreview.com/feed/
+    url: https://www.technologyreview.com/topic/artificial-intelligence/
+
+  - name: Latent Space
+    tier: 2
+    cadence: weekly
+    tags: [ai]
+    # Category: analysis/opinion — long-form technical analysis, weekly cadence
+    rss: https://www.latent.space/feed
+    url: https://www.latent.space/
+
+  - name: AI Snake Oil
+    tier: 2
+    cadence: weekly
+    tags: [ai]
+    # Category: analysis/opinion — critical AI coverage, roughly weekly
+    rss: https://aisnakeoil.substack.com/feed
+    url: https://aisnakeoil.substack.com/
+
+  - name: The Gradient
+    tier: 2
+    cadence: weekly
+    tags: [ai]
+    # Category: analysis/opinion — editorial essays on AI research and policy
+    rss: https://thegradient.pub/rss/
+    url: https://thegradient.pub/
+
+  - name: Stripe Engineering
+    tier: 2
+    cadence: weekly
+    tags: [tech]
+    # Category: analysis/opinion — engineering blog, infrequent but high quality
+    rss: https://stripe.com/blog/feed.rss
+    url: https://stripe.com/blog/engineering
+
+  - name: GitHub Blog Engineering
+    tier: 2
+    cadence: weekly
+    tags: [tech]
+    # Category: analysis/opinion — developer tooling insights, weekly publication
+    rss: https://github.blog/engineering/feed/
+    url: https://github.blog/engineering/
+
+  # --- Newsletters: match publication cadence (weekly) ---
+  # Substrate arrives on fixed schedules. Polling more often processes empty
+  # endosomes. Weekly fetch matches the actual secretion rhythm.
+
+  - name: The Batch
+    tier: 1
+    cadence: weekly
+    tags: [ai]
+    # Category: newsletter — published weekly by DeepLearning.AI
+    rss: https://www.deeplearning.ai/the-batch/feed/
+    url: https://www.deeplearning.ai/the-batch/
+
+  - name: Import AI
+    tier: 1
+    cadence: weekly
+    tags: [ai]
+    # Category: newsletter — Jack Clark's weekly AI digest
+    rss: https://jack-clark.net/feed/
+    url: https://jack-clark.net/
+
+  - name: Interconnects
+    tier: 1
+    cadence: weekly
+    tags: [ai]
+    # Category: newsletter — Nathan Lambert's weekly ML analysis
+    rss: https://www.interconnects.ai/feed
+    url: https://www.interconnects.ai/
+
+  # --- Research / academic: biweekly metabolism ---
+  # Low publication frequency, dense substrate. Biweekly polling keeps the
+  # receptor sensitive without saturating the log with empty results.
+
+  - name: Ahead of AI
+    tier: 1
+    cadence: biweekly
+    tags: [ai]
+    # Category: research/academic — Sebastian Raschka's deep ML research reviews
+    rss: https://magazine.sebastianraschka.com/feed
+    url: https://magazine.sebastianraschka.com/
+
+  - name: Hugging Face Blog
+    tier: 2
+    cadence: biweekly
+    tags: [ai]
+    # Category: research/academic — model releases and research summaries
+    rss: https://huggingface.co/blog/feed.xml
+    url: https://huggingface.co/blog

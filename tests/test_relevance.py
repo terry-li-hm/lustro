@@ -16,7 +16,7 @@ def force_keyword_fallback(monkeypatch):
 
 
 def test_keyword_scoring():
-    result = relevance.score_item(
+    result = relevance.score_cargo(
         "Enterprise agent governance benchmark released",
         "Example Source",
         "Production evaluation and governance patterns for enterprise AI teams.",
@@ -29,9 +29,9 @@ def test_keyword_scoring():
 
 def test_log_score(tmp_path, monkeypatch):
     log_path = tmp_path / "relevance.jsonl"
-    monkeypatch.setattr(relevance, "RELEVANCE_LOG", log_path)
+    monkeypatch.setattr(relevance, "AFFINITY_LOG", log_path)
 
-    relevance.log_score(
+    relevance.log_affinity(
         {
             "timestamp": "2026-03-13T10:00:00+00:00",
             "title": "HKMA updates AML guidance",
@@ -59,9 +59,9 @@ def test_log_score(tmp_path, monkeypatch):
 
 def test_log_engagement(tmp_path, monkeypatch):
     log_path = tmp_path / "engagement.jsonl"
-    monkeypatch.setattr(relevance, "ENGAGEMENT_LOG", log_path)
+    monkeypatch.setattr(relevance, "RECYCLING_LOG", log_path)
 
-    relevance.log_engagement("Anthropic banking release", action="read_full")
+    relevance.log_recycling("Anthropic banking release", action="read_full")
 
     rows = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
     assert len(rows) == 1
@@ -73,8 +73,8 @@ def test_log_engagement(tmp_path, monkeypatch):
 def test_get_stats(tmp_path, monkeypatch):
     relevance_log = tmp_path / "relevance.jsonl"
     engagement_log = tmp_path / "engagement.jsonl"
-    monkeypatch.setattr(relevance, "RELEVANCE_LOG", relevance_log)
-    monkeypatch.setattr(relevance, "ENGAGEMENT_LOG", engagement_log)
+    monkeypatch.setattr(relevance, "AFFINITY_LOG", relevance_log)
+    monkeypatch.setattr(relevance, "RECYCLING_LOG", engagement_log)
 
     relevance_log.write_text(
         "\n".join(
@@ -98,7 +98,7 @@ def test_get_stats(tmp_path, monkeypatch):
         encoding="utf-8",
     )
 
-    stats = relevance.get_stats()
+    stats = relevance.get_affinity_stats()
 
     assert stats["status"] == "ok"
     assert stats["total_scored"] == 3
@@ -109,7 +109,7 @@ def test_get_stats(tmp_path, monkeypatch):
 
 
 def test_score_banking_item_high():
-    result = relevance.score_item(
+    result = relevance.score_cargo(
         "HKMA issues new AML guidance for banks using AI",
         "HKMA",
         "The update covers compliance, fraud detection, and model risk expectations for banks.",
@@ -119,7 +119,7 @@ def test_score_banking_item_high():
 
 
 def test_score_consumer_item_low():
-    result = relevance.score_item(
+    result = relevance.score_cargo(
         "Consumer photo app adds fun AI selfie filters",
         "App Store Blog",
         "A new creator-focused entertainment feature for social media sharing.",
@@ -132,8 +132,8 @@ def test_engagement_boost_affinity(tmp_path, monkeypatch):
     """Source with prior engagement returns +1 (receptor recycled with affinity)."""
     relevance_log = tmp_path / "relevance.jsonl"
     engagement_log = tmp_path / "engagement.jsonl"
-    monkeypatch.setattr(relevance, "RELEVANCE_LOG", relevance_log)
-    monkeypatch.setattr(relevance, "ENGAGEMENT_LOG", engagement_log)
+    monkeypatch.setattr(relevance, "AFFINITY_LOG", relevance_log)
+    monkeypatch.setattr(relevance, "RECYCLING_LOG", engagement_log)
 
     relevance_log.write_text(
         json.dumps({"title": "Prior engaged item", "source": "TechSource", "score": 7}) + "\n",
@@ -152,8 +152,8 @@ def test_engagement_boost_false_positive_penalty(tmp_path, monkeypatch):
     """Source with repeated high scores but zero engagement returns -1 (false-positive signal)."""
     relevance_log = tmp_path / "relevance.jsonl"
     engagement_log = tmp_path / "engagement.jsonl"
-    monkeypatch.setattr(relevance, "RELEVANCE_LOG", relevance_log)
-    monkeypatch.setattr(relevance, "ENGAGEMENT_LOG", engagement_log)
+    monkeypatch.setattr(relevance, "AFFINITY_LOG", relevance_log)
+    monkeypatch.setattr(relevance, "RECYCLING_LOG", engagement_log)
 
     relevance_log.write_text(
         "\n".join([
@@ -173,8 +173,8 @@ def test_engagement_boost_neutral(tmp_path, monkeypatch):
     """Unknown source with no history returns 0 (no recycling signal)."""
     relevance_log = tmp_path / "relevance.jsonl"
     engagement_log = tmp_path / "engagement.jsonl"
-    monkeypatch.setattr(relevance, "RELEVANCE_LOG", relevance_log)
-    monkeypatch.setattr(relevance, "ENGAGEMENT_LOG", engagement_log)
+    monkeypatch.setattr(relevance, "AFFINITY_LOG", relevance_log)
+    monkeypatch.setattr(relevance, "RECYCLING_LOG", engagement_log)
 
     relevance_log.write_text("", encoding="utf-8")
     engagement_log.write_text("", encoding="utf-8")
@@ -187,8 +187,8 @@ def test_engagement_boost_single_high_no_penalty(tmp_path, monkeypatch):
     """Source with only one high-scored unengaged item does NOT get penalised (threshold is 2)."""
     relevance_log = tmp_path / "relevance.jsonl"
     engagement_log = tmp_path / "engagement.jsonl"
-    monkeypatch.setattr(relevance, "RELEVANCE_LOG", relevance_log)
-    monkeypatch.setattr(relevance, "ENGAGEMENT_LOG", engagement_log)
+    monkeypatch.setattr(relevance, "AFFINITY_LOG", relevance_log)
+    monkeypatch.setattr(relevance, "RECYCLING_LOG", engagement_log)
 
     relevance_log.write_text(
         json.dumps({"title": "One high item", "source": "MarginalSource", "score": 8}) + "\n",
@@ -204,8 +204,8 @@ def test_keyword_score_applies_boost(tmp_path, monkeypatch):
     """_keyword_score clamps recycled score to [1, 10]."""
     relevance_log = tmp_path / "relevance.jsonl"
     engagement_log = tmp_path / "engagement.jsonl"
-    monkeypatch.setattr(relevance, "RELEVANCE_LOG", relevance_log)
-    monkeypatch.setattr(relevance, "ENGAGEMENT_LOG", engagement_log)
+    monkeypatch.setattr(relevance, "AFFINITY_LOG", relevance_log)
+    monkeypatch.setattr(relevance, "RECYCLING_LOG", engagement_log)
 
     # Seed affinity for "TrustedSource"
     relevance_log.write_text(
@@ -225,7 +225,7 @@ def test_keyword_score_applies_boost(tmp_path, monkeypatch):
 def test_get_source_signal_ratio_insufficient_data(tmp_path, monkeypatch):
     """Fewer than 5 items in window returns 1.0 (receptor stays at baseline sensitivity)."""
     log_path = tmp_path / "relevance.jsonl"
-    monkeypatch.setattr(relevance, "RELEVANCE_LOG", log_path)
+    monkeypatch.setattr(relevance, "AFFINITY_LOG", log_path)
 
     now_str = "2026-03-25T10:00:00+00:00"
     # Only 3 items — below minimum sample threshold
@@ -236,14 +236,14 @@ def test_get_source_signal_ratio_insufficient_data(tmp_path, monkeypatch):
     ]
     log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    ratio = relevance.get_source_signal_ratio("NoisyFeed", window_days=30)
+    ratio = relevance.get_receptor_signal_ratio("NoisyFeed", window_days=30)
     assert ratio == 1.0
 
 
 def test_get_source_signal_ratio_high_signal(tmp_path, monkeypatch):
     """Source with mostly high scores returns a ratio close to 1.0."""
     log_path = tmp_path / "relevance.jsonl"
-    monkeypatch.setattr(relevance, "RELEVANCE_LOG", log_path)
+    monkeypatch.setattr(relevance, "AFFINITY_LOG", log_path)
 
     now_str = "2026-03-25T10:00:00+00:00"
     # 5 items: 4 high (>=5), 1 low
@@ -256,14 +256,14 @@ def test_get_source_signal_ratio_high_signal(tmp_path, monkeypatch):
     ]
     log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    ratio = relevance.get_source_signal_ratio("SignalFeed", window_days=30)
+    ratio = relevance.get_receptor_signal_ratio("SignalFeed", window_days=30)
     assert ratio == pytest.approx(0.8)
 
 
 def test_get_source_signal_ratio_high_noise(tmp_path, monkeypatch):
     """Source consistently below threshold returns a low ratio (receptor downregulated)."""
     log_path = tmp_path / "relevance.jsonl"
-    monkeypatch.setattr(relevance, "RELEVANCE_LOG", log_path)
+    monkeypatch.setattr(relevance, "AFFINITY_LOG", log_path)
 
     now_str = "2026-03-25T10:00:00+00:00"
     # 5 items: all score < 5 (pure noise)
@@ -276,14 +276,14 @@ def test_get_source_signal_ratio_high_noise(tmp_path, monkeypatch):
     ]
     log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    ratio = relevance.get_source_signal_ratio("NoisyFeed", window_days=30)
+    ratio = relevance.get_receptor_signal_ratio("NoisyFeed", window_days=30)
     assert ratio == pytest.approx(0.0)
 
 
 def test_get_source_signal_ratio_ignores_outside_window(tmp_path, monkeypatch):
     """Entries older than the window are not counted (receptor stimulus decays)."""
     log_path = tmp_path / "relevance.jsonl"
-    monkeypatch.setattr(relevance, "RELEVANCE_LOG", log_path)
+    monkeypatch.setattr(relevance, "AFFINITY_LOG", log_path)
 
     # 5 old (outside 30-day window) + 5 recent noise items
     old_str = "2025-01-01T10:00:00+00:00"   # well outside window
@@ -294,7 +294,7 @@ def test_get_source_signal_ratio_ignores_outside_window(tmp_path, monkeypatch):
     )
     log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    ratio = relevance.get_source_signal_ratio("MixedFeed", window_days=30)
+    ratio = relevance.get_receptor_signal_ratio("MixedFeed", window_days=30)
     # Only the 5 recent items count; all score 1 → ratio = 0.0
     assert ratio == pytest.approx(0.0)
 
@@ -302,7 +302,7 @@ def test_get_source_signal_ratio_ignores_outside_window(tmp_path, monkeypatch):
 def test_get_source_signal_ratio_ignores_other_sources(tmp_path, monkeypatch):
     """Items from other sources do not contaminate a source's signal ratio."""
     log_path = tmp_path / "relevance.jsonl"
-    monkeypatch.setattr(relevance, "RELEVANCE_LOG", log_path)
+    monkeypatch.setattr(relevance, "AFFINITY_LOG", log_path)
 
     now_str = "2026-03-25T10:00:00+00:00"
     lines = [
@@ -318,5 +318,5 @@ def test_get_source_signal_ratio_ignores_other_sources(tmp_path, monkeypatch):
     ]
     log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    ratio = relevance.get_source_signal_ratio("TargetFeed", window_days=30)
+    ratio = relevance.get_receptor_signal_ratio("TargetFeed", window_days=30)
     assert ratio == pytest.approx(1.0)

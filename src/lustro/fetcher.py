@@ -181,6 +181,7 @@ def fetch_stealth_url(url: str, profile_dir: Path) -> str | None:
     """
     try:
         import asyncio
+
         import nodriver as uc
 
         async def _fetch() -> str:
@@ -215,6 +216,7 @@ def fetch_stealth_html(url: str, profile_dir: Path) -> str | None:
     """Fetch URL using nodriver and return rendered body HTML for link extraction."""
     try:
         import asyncio
+
         import nodriver as uc
 
         async def _fetch() -> str:
@@ -263,13 +265,13 @@ _LINKEDIN_JS = """
 """
 
 
-def fetch_linkedin_company(
+def internalize_linkedin(
     slug: str,
     since_date: str,
     max_items: int = 5,
     agent_browser_bin: str = "agent-browser",
 ) -> list[dict[str, str]] | None:
-    """Fetch LinkedIn company posts via agent-browser (requires active session).
+    """Internalize LinkedIn company posts via agent-browser (requires active session).
 
     slug: LinkedIn company URL slug (e.g. 'the-hong-kong-institute-of-bankers')
     Requires agent-browser daemon running with a logged-in LinkedIn session.
@@ -279,7 +281,9 @@ def fetch_linkedin_company(
         # Navigate to the page (agent-browser daemon must be running)
         nav = subprocess.run(
             [agent_browser_bin, "open", url],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         if nav.returncode != 0:
             print(f"  linkedin: open failed for {slug}: {nav.stderr[:80]}", file=sys.stderr)
@@ -288,7 +292,9 @@ def fetch_linkedin_company(
         # Extract posts via JS eval
         result = subprocess.run(
             [agent_browser_bin, "eval", _LINKEDIN_JS],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         if result.returncode != 0:
             print(f"  linkedin: eval failed for {slug}: {result.stderr[:80]}", file=sys.stderr)
@@ -304,12 +310,14 @@ def fetch_linkedin_company(
             title = str(post.get("title", "")).strip()
             if not title or len(title) < 15:
                 continue
-            articles.append({
-                "title": title,
-                "summary": str(post.get("summary", "")),
-                "date": "",
-                "link": url,
-            })
+            articles.append(
+                {
+                    "title": title,
+                    "summary": str(post.get("summary", "")),
+                    "date": "",
+                    "link": url,
+                }
+            )
         print(f"  linkedin: {slug} → {len(articles)} posts", file=sys.stderr)
         return articles
     except subprocess.TimeoutExpired:
@@ -320,7 +328,7 @@ def fetch_linkedin_company(
         return None
 
 
-def fetch_json_api(
+def internalize_json_api(
     url: str,
     since_date: str,
     title_key: str = "title",
@@ -329,7 +337,7 @@ def fetch_json_api(
     records_path: tuple[str, ...] = ("result", "records"),
     max_items: int = 10,
 ) -> list[dict[str, str]] | None:
-    """Fetch articles from a JSON API (e.g. HKMA press releases).
+    """Internalize cargo from a JSON API (e.g. HKMA press releases).
 
     Args:
         url: API endpoint URL.
@@ -356,7 +364,7 @@ def fetch_json_api(
         return None
 
     articles: list[dict[str, str]] = []
-    for record in records[:max_items * 3]:
+    for record in records[: max_items * 3]:
         title = str(record.get(title_key, "")).strip()
         if not title:
             continue
@@ -371,7 +379,7 @@ def fetch_json_api(
     return articles
 
 
-def fetch_rss(
+def internalize_rss(
     url: str,
     since_date: str,
     max_items: int = 5,
@@ -460,7 +468,7 @@ def fetch_rss(
         return []
 
 
-def fetch_web(
+def internalize_web(
     url: str,
     max_items: int = 5,
     selector: str | None = None,
@@ -488,7 +496,7 @@ def fetch_web(
             for tag in soup.select(selector)[:max_items]:
                 # Prefer heading child over full card text (avoids category label noise)
                 heading = tag.find(["h2", "h3", "h4"]) if tag.name == "a" else None
-                title = (heading.get_text().strip() if heading else tag.get_text().strip())
+                title = heading.get_text().strip() if heading else tag.get_text().strip()
                 if title and len(title) > 10:
                     link = tag.get("href", "") if tag.name == "a" else ""
                     if not link:
@@ -519,7 +527,7 @@ def fetch_web(
         return None
 
 
-def fetch_x_account(
+def internalize_x_account(
     handle: str, since_date: str, max_items: int = 5, bird_path: str | None = None
 ) -> list[dict[str, str]]:
     clean = handle.lstrip("@")
@@ -564,7 +572,7 @@ def fetch_x_account(
         return []
 
 
-def fetch_x_bookmarks(
+def internalize_x_bookmarks(
     since_date: str, max_items: int = 10, bird_path: str | None = None
 ) -> list[dict[str, str]]:
     bird_cli = bird_path or shutil.which("bird")
@@ -596,7 +604,15 @@ def fetch_x_bookmarks(
             tweet_id = tweet.get("id", "")
             username = tweet.get("author", {}).get("username", "")
             link = f"https://x.com/{username}/status/{tweet_id}" if tweet_id and username else ""
-            articles.append({"title": title, "date": date_str, "summary": "", "link": link, "_tweet_id": tweet_id})
+            articles.append(
+                {
+                    "title": title,
+                    "date": date_str,
+                    "summary": "",
+                    "link": link,
+                    "_tweet_id": tweet_id,
+                }
+            )
             if len(articles) >= max_items:
                 break
         return articles
@@ -634,7 +650,7 @@ def _title_hash(title: str) -> str:
     return hashlib.sha256(title.encode()).hexdigest()[:8]
 
 
-def archive_article(
+def archive_cargo(
     article: Mapping[str, str],
     source_name: str,
     tier: int,
@@ -709,7 +725,7 @@ def archive_article(
     print(f"  Archived: {filename} [{len(text)} chars]", file=sys.stderr)
 
 
-def check_sources(
+def check_receptors(
     sources: list[dict[str, Any]],
     x_accounts: list[dict[str, Any]],
     state: Mapping[str, str],
@@ -835,7 +851,10 @@ def check_sources(
             w_status = str(resp.status_code)
         except Exception:
             w_status = "DOWN"
-        print(f"\n{'Wechat2RSS (localhost:8001)':<36} {'—':>1} {w_status:>5} {f'({len(wechat_sources)} feeds)':>12}", file=sys.stderr)
+        print(
+            f"\n{'Wechat2RSS (localhost:8001)':<36} {'—':>1} {w_status:>5} {f'({len(wechat_sources)} feeds)':>12}",
+            file=sys.stderr,
+        )
 
     bm_count = len(x_bookmarks) if x_bookmarks else 0
     parts = [f"{len(sources)} web/RSS", f"{len(x_accounts)} X accounts"]
