@@ -54,7 +54,10 @@ def test_fetch_fallback_and_zeros(monkeypatch, mock_cfg, capsys):
     monkeypatch.setattr("lustro.fetcher.fetch_web", lambda _url, **kwargs: [{"title": "Web Article", "link": "https://live.web/1"}])
     
     # Mock other needed functions
+    # Patch both the module attribute and the name bound in cli's namespace
     monkeypatch.setattr("lustro.state.should_fetch", lambda *args, **kwargs: True)
+    monkeypatch.setattr("lustro.cli.should_fetch", lambda *args, **kwargs: True)
+    monkeypatch.setattr("lustro.relevance.get_source_signal_ratio", lambda *args, **kwargs: 1.0)
     monkeypatch.setattr("lustro.log.rotate_log", lambda *args: None)
     monkeypatch.setattr("lustro.log.load_title_prefixes", lambda _p: set())
     monkeypatch.setattr("lustro.log.is_junk", lambda _t: False)

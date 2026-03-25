@@ -9,7 +9,7 @@ from typing import Optional
 import typer
 
 from lustro.config import LustroConfig, default_sources_text, load_config
-from lustro.state import load_state, lockfile
+from lustro.state import load_state, lockfile, should_fetch
 
 app = typer.Typer(help="Lustro — AI news aggregator")
 
@@ -120,7 +120,7 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
         load_title_prefixes,
         rotate_log,
     )
-    from lustro.relevance import log_score, score_item
+    from lustro.relevance import get_source_signal_ratio, log_score, score_item
     from lustro.state import save_state
 
     now = datetime.now(timezone.utc)
@@ -143,6 +143,15 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
         name = source["name"]
         cadence = source.get("cadence", "daily")
         tier = source.get("tier", 2)
+
+        # Receptor downregulation: measure the source's signal-to-noise ratio
+        # and extend the refractory period for chronically noisy sources so the
+        # cell is not flooded with irrelevant ligands.
+        signal_ratio = get_source_signal_ratio(name)
+        if not should_fetch(state, name, cadence, now=now, signal_ratio=signal_ratio):
+            typer.echo(f"Skipping: {name} (cadence)", err=True)
+            continue
+
         typer.echo(f"Fetching: {name}...", err=True)
         fetch_failed = False
         since_date = _source_since_date(state, name, global_since_date, cadence=cadence, now=now)
@@ -267,10 +276,31 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
     if not results:
         typer.echo("No new articles found.", err=True)
         raise typer.Exit(code=0)
+
+    # Endosome sorting: route each source's cargo to fate compartments.
+    # Only store + transcytose cargo survives to the news log; degrade cargo
+    # is silently dropped (lysosomal fate — not persisted).
+    from lustro.sorting import filter_for_log
+    sorted_results: dict[str, list[dict[str, str]]] = {}
+    degraded_count = 0
+    for source_name, source_articles in results.items():
+        survivors = filter_for_log(source_articles)
+        dropped = len(source_articles) - len(survivors)
+        degraded_count += dropped
+        if survivors:
+            sorted_results[source_name] = survivors
+
+    if degraded_count:
+        typer.echo(f"Endosome: {degraded_count} low-signal items degraded (not logged).", err=True)
+
+    if not sorted_results:
+        typer.echo("No articles survived endosome sorting.", err=True)
+        raise typer.Exit(code=0)
+
     today = now.strftime("%Y-%m-%d")
-    md = format_markdown(results, today)
+    md = format_markdown(sorted_results, today)
     append_to_log(cfg.log_path, md)
-    total = sum(len(v) for v in results.values())
+    total = sum(len(v) for v in sorted_results.values())
     typer.echo(f"Logged {total} new articles.", err=True)
     if bookmark_ids_to_clear:
         unbookmark_tweets(bookmark_ids_to_clear, bird_path=cfg.resolve_bird())

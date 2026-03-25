@@ -17,6 +17,8 @@ from lustro.fetcher import fetch_rss, fetch_web
 from lustro.log import append_to_log
 from lustro.state import lockfile
 
+ALERT_SIGNAL_LOG = Path.home() / ".cache" / "lustro" / "alert-signals.jsonl"
+
 MAX_ALERTS_PER_DAY = 3
 COOLDOWN_MINUTES = 60
 MAX_SEEN_IDS = 200
@@ -27,7 +29,8 @@ ENTITIES = re.compile(
     r"mistral|x\.?ai|grok|"
     r"hkma|mas|sec|eu\s?ai\s?act|pboc|"
     r"gpt[-\s]?\d|claude[-\s]?\d|gemini[-\s]?\d|llama[-\s]?\d|"
-    r"o[1-9][-\s]|sonnet|opus|haiku"
+    r"o[1-9][-\s]|sonnet|opus|haiku|"
+    r"codex"
     r")\b"
 )
 ACTIONS = re.compile(
@@ -37,7 +40,8 @@ ACTIONS = re.compile(
     r"introduc|announc|unveil|"
     r"open.?sourc|"
     r"acquir|merg|shut.?down|"
-    r"ban[s\b]|mandat"
+    r"ban[s\b]|mandat|"
+    r"available|publishes|published|enters|entered"
     r")"
 )
 NEGATIVE = re.compile(
@@ -48,6 +52,29 @@ NEGATIVE = re.compile(
     r"round|funding|series\s[a-d]"
     r")\b"
 )
+
+
+BREAKING_FRESHNESS_HOURS = 2
+
+
+def _article_is_fresh(article: dict[str, Any], now: datetime, max_hours: float = BREAKING_FRESHNESS_HOURS) -> bool:
+    """Return True if the article was published within ``max_hours`` of ``now``.
+
+    Reads the ``published_at`` field (ISO 8601 UTC string) added by
+    ``fetch_rss``.  If the field is absent or unparseable the article is
+    treated as fresh so the breaking label is NOT suppressed — fail open.
+    """
+    raw = article.get("published_at", "")
+    if not raw:
+        return True  # no date available → don't suppress
+    try:
+        pub = datetime.fromisoformat(str(raw))
+    except (ValueError, TypeError):
+        return True  # malformed date → don't suppress
+    if pub.tzinfo is None:
+        pub = pub.replace(tzinfo=timezone.utc)
+    age = (now - pub).total_seconds()
+    return age <= max_hours * 3600
 
 
 def is_breaking(title: str) -> bool:
@@ -63,6 +90,18 @@ def is_breaking(title: str) -> bool:
 def article_hash(title: str, link: str, source: str) -> str:
     raw = f"{title}|{link}|{source}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def title_fingerprint(title: str) -> str:
+    """Normalised fingerprint of a title for cross-source dedup.
+
+    Lowercases, strips non-alphanumeric characters, and hashes.  Two titles
+    that differ only in punctuation, case, or whitespace will share the same
+    fingerprint.  Used within a single run to suppress duplicate alerts for
+    the same story appearing in multiple feeds.
+    """
+    normalised = re.sub(r"[^a-z0-9]", "", title.lower())
+    return hashlib.sha256(normalised.encode("utf-8")).hexdigest()[:16]
 
 
 def load_breaking_state(path: Path, now: datetime) -> dict[str, Any]:
@@ -127,6 +166,64 @@ def _resolve_tg_notify(cfg_path: str | None = None) -> str | None:
         return found
     fallback = Path.home() / "scripts" / "tg-notify.sh"
     return str(fallback) if fallback.is_file() else None
+
+
+def _age_minutes(published_at: str, now: datetime) -> float | None:
+    """Return article age in minutes from published_at ISO string, or None if unavailable."""
+    if not published_at:
+        return None
+    try:
+        pub = datetime.fromisoformat(str(published_at))
+    except (ValueError, TypeError):
+        return None
+    if pub.tzinfo is None:
+        pub = pub.replace(tzinfo=timezone.utc)
+    return round((now - pub).total_seconds() / 60, 1)
+
+
+def append_alert_signal(
+    path: Path,
+    *,
+    timestamp: str,
+    title: str,
+    source: str,
+    url: str,
+    published_at: str,
+    age_minutes: float | None,
+    was_breaking: bool,
+    alert_sent: bool,
+    throttled: bool,
+    suppressed_stale: bool,
+) -> None:
+    """Append one record to the alert-signals JSONL log (atomic line append).
+
+    Schema:
+      timestamp       – ISO 8601 UTC — when lustro breaking ran
+      title           – article title
+      source          – source name from sources.yaml
+      url             – article link
+      published_at    – article's own publication timestamp (ISO 8601) or ""
+      age_minutes     – float minutes old at detection time, or null
+      was_breaking    – passed is_breaking() title filter
+      alert_sent      – Telegram alert was dispatched
+      throttled       – matched breaking but held back by daily cap / cooldown
+      suppressed_stale – matched breaking but failed freshness gate
+    """
+    record = {
+        "timestamp": timestamp,
+        "title": title,
+        "source": source,
+        "url": url,
+        "published_at": published_at,
+        "age_minutes": age_minutes,
+        "was_breaking": was_breaking,
+        "alert_sent": alert_sent,
+        "throttled": throttled,
+        "suppressed_stale": suppressed_stale,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def _source_candidates(cfg: LustroConfig) -> list[dict[str, Any]]:
@@ -211,8 +308,16 @@ def _run_breaking_locked(
 
     seen_list = [str(value) for value in state.get("seen_ids", []) if isinstance(value, str)]
     seen_set = set(seen_list)
+    # Cross-source dedup: tracks normalised title fingerprints within this run.
+    # If two feeds carry the same story (same title, different source), only the
+    # first occurrence fires an alert.
+    # TODO: persist title fingerprints across runs so that stories seen in a
+    # previous wave are also suppressed (currently dedup is intra-run only).
+    content_seen_this_run: set[str] = set()
     since_date = (now - timedelta(days=2)).strftime("%Y-%m-%d")
     matches: list[dict[str, str]] = []
+    signal_log_path = ALERT_SIGNAL_LOG
+    now_iso = now.isoformat()
 
     print(f"[{now.strftime('%Y-%m-%d %H:%M')} UTC] Breaking news check", file=sys.stderr)
 
@@ -236,8 +341,43 @@ def _run_breaking_locked(
                 continue
             seen_set.add(digest)
             seen_list.append(digest)
-            if is_breaking(title):
-                matches.append({"title": title, "link": link, "source": source_name})
+            published_at = str(article.get("published_at", ""))
+            age_mins = _age_minutes(published_at, now)
+            breaking = is_breaking(title)
+            if breaking:
+                # Cross-source dedup: suppress if an equivalent story already
+                # matched from a different feed in this same run.
+                fp = title_fingerprint(title)
+                if fp in content_seen_this_run:
+                    print(
+                        f"  Cross-source dedup: suppressed duplicate story from {source_name}: {title}",
+                        file=sys.stderr,
+                    )
+                    continue
+                content_seen_this_run.add(fp)
+
+                fresh = _article_is_fresh(article, now)
+                if not fresh:
+                    print(
+                        f"  Freshness gate: suppressed breaking label for stale article "
+                        f"(published_at={published_at or 'unknown'}): {title}",
+                        file=sys.stderr,
+                    )
+                    append_alert_signal(
+                        signal_log_path,
+                        timestamp=now_iso,
+                        title=title,
+                        source=source_name,
+                        url=link,
+                        published_at=published_at,
+                        age_minutes=age_mins,
+                        was_breaking=True,
+                        alert_sent=False,
+                        throttled=False,
+                        suppressed_stale=True,
+                    )
+                    continue
+                matches.append({"title": title, "link": link, "source": source_name, "published_at": published_at})
 
     if len(seen_list) > MAX_SEEN_IDS:
         seen_list = seen_list[-MAX_SEEN_IDS:]
@@ -253,8 +393,24 @@ def _run_breaking_locked(
     print(f"{len(matches)} breaking match(es) found.", file=sys.stderr)
     sent_matches: list[dict[str, str]] = []
     for match in matches:
-        if not dry_run and not can_alert(state, now):
+        match_pub = str(match.get("published_at", ""))
+        match_age = _age_minutes(match_pub, now)
+        throttled = not dry_run and not can_alert(state, now)
+        if throttled:
             print(f"Throttled: {match['title']}", file=sys.stderr)
+            append_alert_signal(
+                signal_log_path,
+                timestamp=now_iso,
+                title=match["title"],
+                source=match["source"],
+                url=match.get("link", ""),
+                published_at=match_pub,
+                age_minutes=match_age,
+                was_breaking=True,
+                alert_sent=False,
+                throttled=True,
+                suppressed_stale=False,
+            )
             continue
         _send_alert(
             match["title"],
@@ -268,6 +424,19 @@ def _run_breaking_locked(
             state["alerts_today"] = int(state.get("alerts_today", 0)) + 1
             state["last_alert_time"] = now.isoformat()
             sent_matches.append(match)
+            append_alert_signal(
+                signal_log_path,
+                timestamp=now_iso,
+                title=match["title"],
+                source=match["source"],
+                url=match.get("link", ""),
+                published_at=match_pub,
+                age_minutes=match_age,
+                was_breaking=True,
+                alert_sent=True,
+                throttled=False,
+                suppressed_stale=False,
+            )
 
     if not dry_run:
         _append_breaking_log(cfg, sent_matches, now)

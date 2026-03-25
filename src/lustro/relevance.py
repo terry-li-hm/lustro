@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, os.path.join(os.path.expanduser("~"), "officina", "lib"))
+sys.path.insert(0, os.path.join(os.path.expanduser("~"), "reticulum", "lib"))
 from llm import query as _llm_query
 
 RELEVANCE_LOG = Path.home() / ".cache" / "lustro" / "relevance.jsonl"
@@ -49,11 +49,15 @@ def score_item(title: str, source: str, summary: str) -> dict[str, Any]:
         if start >= 0 and end > start:
             payload = json.loads(text[start:end])
             if isinstance(payload, dict):
-                return _normalize_score_payload(payload)
+                result = _normalize_score_payload(payload)
+                # Receptor recycling: post-adjust LLM score with engagement affinity signal
+                boost = _engagement_boost(title, source)
+                result["score"] = max(1, min(result["score"] + boost, 10))
+                return result
     except (subprocess.TimeoutExpired, FileNotFoundError, json.JSONDecodeError, Exception):
         pass
 
-    return _keyword_score(title, summary)
+    return _keyword_score(title, summary, source=source)
 
 
 def _normalize_score_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -69,8 +73,61 @@ def _normalize_score_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _keyword_score(title: str, summary: str) -> dict[str, Any]:
-    """Simple keyword-based relevance scoring as fallback."""
+def _engagement_boost(title: str, source: str) -> int:
+    """Receptor recycling: return a score adjustment based on prior engagement signals.
+
+    After endocytosis (engagement), receptors return to the cell surface with
+    updated affinity. Sources that generated genuine engagement get a +1 boost;
+    sources with repeated false-positive signals (high-scored but never engaged)
+    accumulate a -1 penalty.
+
+    Args:
+        title: Item title (used to check if this specific item was ever engaged).
+        source: Feed source name (used to compute source-level affinity).
+
+    Returns:
+        +1 if the source has affinity (prior engagement on any item from this source),
+        -1 if the source is a false-positive emitter (scored >=7 repeatedly, never engaged),
+         0 otherwise.
+    """
+    scored_rows = _read_jsonl(RELEVANCE_LOG)
+    engaged_rows = _read_jsonl(ENGAGEMENT_LOG)
+
+    if not scored_rows:
+        return 0
+
+    # Build set of engaged titles for cross-referencing
+    engaged_titles: set[str] = {str(r.get("title", "")) for r in engaged_rows if r.get("title")}
+
+    # Source affinity: any previously engaged item came from this source
+    source_engaged = any(
+        str(r.get("source", "")) == source and str(r.get("title", "")) in engaged_titles
+        for r in scored_rows
+    )
+    if source_engaged:
+        return 1
+
+    # False-positive signal: source has >=2 high-scored items (score>=7) with zero engagement
+    source_high_scored = [
+        r for r in scored_rows
+        if str(r.get("source", "")) == source and int(r.get("score", 0)) >= 7
+    ]
+    source_high_engaged_count = sum(
+        1 for r in source_high_scored
+        if str(r.get("title", "")) in engaged_titles
+    )
+    if len(source_high_scored) >= 2 and source_high_engaged_count == 0:
+        return -1
+
+    return 0
+
+
+def _keyword_score(title: str, summary: str, source: str = "") -> dict[str, Any]:
+    """Simple keyword-based relevance scoring as fallback.
+
+    Applies receptor recycling via _engagement_boost so the deterministic
+    fallback accumulates affinity signal over time without needing the LLM.
+    """
     text = f"{title} {summary}".lower()
     score = 2
 
@@ -126,6 +183,10 @@ def _keyword_score(title: str, summary: str) -> dict[str, Any]:
         if kw in text:
             score = max(score - 1, 1)
 
+    # Receptor recycling: apply engagement-derived affinity boost before returning
+    boost = _engagement_boost(title, source)
+    score = max(1, min(score + boost, 10))
+
     return {"score": score, "banking_angle": "N/A", "talking_point": "N/A"}
 
 
@@ -170,6 +231,45 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
         if isinstance(payload, dict):
             rows.append(payload)
     return rows
+
+
+def get_source_signal_ratio(source: str, window_days: int = 30) -> float:
+    """Measure the signal-to-noise ratio for a receptor (source) over a time window.
+
+    Receptors chronically overstimulated by low-relevance ligands (articles)
+    are candidates for downregulation — fetched less frequently so the cell is
+    not flooded with noise.
+
+    Returns the fraction of items from this source scoring >= 5 within the
+    window.  Returns 1.0 (assume high signal) when fewer than 5 items have been
+    scored — insufficient stimulus history to trigger downregulation.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=window_days)
+    total = 0
+    signal = 0
+    for entry in _read_jsonl(RELEVANCE_LOG):
+        if entry.get("source") != source:
+            continue
+        raw_timestamp = entry.get("timestamp")
+        try:
+            timestamp = datetime.fromisoformat(str(raw_timestamp))
+        except (ValueError, TypeError):
+            continue
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+        if timestamp < cutoff:
+            continue
+        total += 1
+        score = entry.get("score", 0)
+        try:
+            if int(score) >= 5:
+                signal += 1
+        except (TypeError, ValueError):
+            pass
+    # Insufficient stimulus history: receptor stays at baseline sensitivity
+    if total < 5:
+        return 1.0
+    return signal / total
 
 
 def get_stats() -> dict[str, Any]:

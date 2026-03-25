@@ -77,8 +77,27 @@ def should_fetch(
     source_name: str,
     cadence: str,
     now: datetime | None = None,
+    signal_ratio: float = 1.0,
 ) -> bool:
+    """Decide whether to fetch a source, applying receptor downregulation.
+
+    A source that chronically emits low-relevance content is treated like an
+    overstimulated receptor: it internalizes (downregulates) by extending its
+    refractory period.  signal_ratio is the fraction of recent items scoring
+    >= 5; sources below threshold have their cadence interval extended:
+
+      >= 0.5  — high signal, normal cadence (no downregulation)
+      0.2-0.5 — moderate noise, +2 days refractory extension
+      < 0.2   — high noise, +7 days refractory extension (internalized)
+    """
     cadence_days = _CADENCE_DAYS.get(cadence, 1)
+
+    # Receptor downregulation: extend refractory period for noisy sources
+    if signal_ratio < 0.2:
+        cadence_days += 7   # high noise — receptor internalized
+    elif signal_ratio < 0.5:
+        cadence_days += 2   # moderate noise — partial downregulation
+
     last_seen_raw = state.get(source_name)
     if not last_seen_raw:
         return True
