@@ -427,6 +427,48 @@ def log(
     raise typer.Exit(code=0)
 
 
+@app.command("search")
+def search_command(
+    keyword: Optional[str] = typer.Argument(
+        None,
+        help="Case-insensitive text to find in log entries",
+    ),
+    handle: Optional[str] = typer.Option(None, "--handle", help="Filter by X handle"),
+    source: Optional[str] = typer.Option(None, "--source", help="Filter by source heading"),
+    since: Optional[str] = typer.Option(None, "--since", help="Earliest scan date (YYYY-MM-DD)"),
+    until: Optional[str] = typer.Option(None, "--until", help="Latest scan date (YYYY-MM-DD)"),
+) -> None:
+    """Search entries in the AI news log."""
+    from lustro.search import SearchParams, parse_iso_date, run_search
+
+    keyword = keyword.strip() if keyword else None
+    handle = handle.strip() if handle else None
+    source = source.strip() if source else None
+    if not any((keyword, handle, source)):
+        raise typer.BadParameter("provide KEYWORD, --handle, or --source")
+
+    try:
+        since_date = parse_iso_date(since) if since is not None else None
+        until_date = parse_iso_date(until) if until is not None else None
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    if since_date is not None and until_date is not None and since_date > until_date:
+        raise typer.BadParameter("--since must not be later than --until")
+
+    cfg = load_config()
+    code = run_search(
+        cfg.log_path,
+        SearchParams(
+            keyword=keyword,
+            handle=handle,
+            source=source,
+            since=since_date,
+            until=until_date,
+        ),
+    )
+    raise typer.Exit(code=code)
+
+
 @app.command()
 def breaking(
     dry_run: bool = typer.Option(False, "--dry-run"),

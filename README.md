@@ -28,6 +28,7 @@ uv tool install "lustro[digest]"
 lustro init          # Create config dirs and starter sources
 lustro fetch         # Fetch sources, dedupe, append to log
 lustro log           # Show recent log lines
+lustro search "agent"  # Search log entries and retain their date/source context
 lustro status        # Show config paths, state, cache stats
 lustro sources       # List all configured sources
 lustro check         # Health-check configured sources
@@ -43,6 +44,7 @@ lustro digest        # Generate monthly thematic digest
 | `fetch [--no-archive]` | Fetch all sources, dedupe against log, append new items. `--no-archive` skips full-text caching. |
 | `check` | HTTP health-check all configured sources. |
 | `log [-n LINES]` | Tail the news log (default 50 lines). |
+| `search [KEYWORD] [--handle HANDLE] [--source SOURCE] [--since YYYY-MM-DD] [--until YYYY-MM-DD]` | Search log entries with case-insensitive selectors and inclusive scan-date bounds. Selectors combine with AND semantics. Examples: `lustro search "PowerPoint" --since 2026-02-01`, `lustro search --handle emollick`. |
 | `status` | Show config paths, state file ages, and article cache stats. |
 | `sources [--tier N]` | List configured sources with type, tier, and cadence. Filter by tier. |
 | `breaking [--dry-run]` | Poll tier-1 sources for breaking news (entity + action keyword match). Sends Telegram alerts with rate limiting (3/day, 60min cooldown). |
