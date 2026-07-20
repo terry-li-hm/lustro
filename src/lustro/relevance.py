@@ -1,23 +1,17 @@
-from __future__ import annotations
-
 """Score news items for consulting relevance."""
 
+from __future__ import annotations
+
 import json
-import os
-import subprocess
-import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, os.path.join(os.path.expanduser("~"), "code", "vivesca", "lib"))
-from llm import query as _llm_query
-
 AFFINITY_LOG = Path.home() / ".cache" / "lustro" / "relevance.jsonl"
 RECYCLING_LOG = Path.home() / ".cache" / "lustro" / "engagement.jsonl"
 
-SCORING_PROMPT = """Rate this AI news item for relevance to a Principal Consultant / AI Solution Lead
-advising bank clients. Score 1-10:
+SCORING_PROMPT = """Rate this AI news item for relevance to a Principal Consultant /
+AI Solution Lead advising bank clients. Score 1-10:
 
 10 = Must-know for client meetings (regulatory change, major vendor announcement affecting banks)
 7-9 = High relevance (new AI capability with clear banking/fintech application)
@@ -38,6 +32,15 @@ Respond in JSON only:
 """
 
 
+def _llm_query(model: str, prompt: str, timeout: int) -> str:
+    """Use the optional Vivesca scorer when installed, otherwise trigger fallback scoring."""
+    try:
+        from llm import query
+    except (ImportError, AttributeError) as exc:
+        raise FileNotFoundError("optional Vivesca llm.query is unavailable") from exc
+    return query(model, prompt, timeout=timeout)
+
+
 def score_cargo(title: str, source: str, summary: str) -> dict[str, Any]:
     """Score a single cargo item using Gemini, with keyword fallback."""
     prompt = SCORING_PROMPT.format(title=title, source=source, summary=summary)
@@ -54,7 +57,7 @@ def score_cargo(title: str, source: str, summary: str) -> dict[str, Any]:
                 boost = _engagement_boost(title, source)
                 result["score"] = max(1, min(result["score"] + boost, 10))
                 return result
-    except (subprocess.TimeoutExpired, FileNotFoundError, json.JSONDecodeError, Exception):
+    except Exception:
         pass
 
     return _keyword_score(title, summary, source=source)

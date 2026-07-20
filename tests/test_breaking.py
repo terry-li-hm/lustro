@@ -5,7 +5,13 @@ from datetime import datetime, timedelta, timezone
 
 import yaml
 
-from lustro.breaking import can_alert, is_breaking, reset_daily_counter, run_breaking, title_fingerprint
+from lustro.breaking import (
+    can_alert,
+    is_breaking,
+    reset_daily_counter,
+    run_breaking,
+    title_fingerprint,
+)
 from lustro.config import load_config
 
 

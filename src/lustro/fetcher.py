@@ -851,10 +851,9 @@ def check_receptors(
             w_status = str(resp.status_code)
         except Exception:
             w_status = "DOWN"
-        print(
-            f"\n{'Wechat2RSS (localhost:8001)':<36} {'—':>1} {w_status:>5} {f'({len(wechat_sources)} feeds)':>12}",
-            file=sys.stderr,
-        )
+        source_name = "Wechat2RSS (localhost:8001)"
+        feed_count = f"({len(wechat_sources)} feeds)"
+        print(f"\n{source_name:<36} {'—':>1} {w_status:>5} {feed_count:>12}", file=sys.stderr)
 
     bm_count = len(x_bookmarks) if x_bookmarks else 0
     parts = [f"{len(sources)} web/RSS", f"{len(x_accounts)} X accounts"]

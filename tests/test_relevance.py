@@ -1,18 +1,23 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from lustro import relevance
 
 
+def _timestamp(days_ago: int = 0) -> str:
+    return (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
+
+
 @pytest.fixture(autouse=True)
 def force_keyword_fallback(monkeypatch):
-    def fake_run(*_args, **_kwargs):
+    def fake_query(*_args, **_kwargs):
         raise FileNotFoundError
 
-    monkeypatch.setattr(relevance.subprocess, "run", fake_run)
+    monkeypatch.setattr(relevance, "_llm_query", fake_query)
 
 
 def test_keyword_scoring():
@@ -79,9 +84,30 @@ def test_get_stats(tmp_path, monkeypatch):
     relevance_log.write_text(
         "\n".join(
             [
-                json.dumps({"timestamp": "2026-03-10T10:00:00+00:00", "title": "Low but engaged", "source": "A", "score": 4}),
-                json.dumps({"timestamp": "2026-03-10T11:00:00+00:00", "title": "High ignored", "source": "B", "score": 8}),
-                json.dumps({"timestamp": "2026-03-10T12:00:00+00:00", "title": "High engaged", "source": "C", "score": 9}),
+                json.dumps(
+                    {
+                        "timestamp": "2026-03-10T10:00:00+00:00",
+                        "title": "Low but engaged",
+                        "source": "A",
+                        "score": 4,
+                    }
+                ),
+                json.dumps(
+                    {
+                        "timestamp": "2026-03-10T11:00:00+00:00",
+                        "title": "High ignored",
+                        "source": "B",
+                        "score": 8,
+                    }
+                ),
+                json.dumps(
+                    {
+                        "timestamp": "2026-03-10T12:00:00+00:00",
+                        "title": "High engaged",
+                        "source": "C",
+                        "score": 9,
+                    }
+                ),
             ]
         )
         + "\n",
@@ -90,8 +116,20 @@ def test_get_stats(tmp_path, monkeypatch):
     engagement_log.write_text(
         "\n".join(
             [
-                json.dumps({"timestamp": "2026-03-10T13:00:00+00:00", "title": "Low but engaged", "action": "deepened"}),
-                json.dumps({"timestamp": "2026-03-10T14:00:00+00:00", "title": "High engaged", "action": "deepened"}),
+                json.dumps(
+                    {
+                        "timestamp": "2026-03-10T13:00:00+00:00",
+                        "title": "Low but engaged",
+                        "action": "deepened",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "timestamp": "2026-03-10T14:00:00+00:00",
+                        "title": "High engaged",
+                        "action": "deepened",
+                    }
+                ),
             ]
         )
         + "\n",
@@ -227,7 +265,7 @@ def test_get_source_signal_ratio_insufficient_data(tmp_path, monkeypatch):
     log_path = tmp_path / "relevance.jsonl"
     monkeypatch.setattr(relevance, "AFFINITY_LOG", log_path)
 
-    now_str = "2026-03-25T10:00:00+00:00"
+    now_str = _timestamp()
     # Only 3 items — below minimum sample threshold
     lines = [
         json.dumps({"timestamp": now_str, "source": "NoisyFeed", "score": 1}),
@@ -245,7 +283,7 @@ def test_get_source_signal_ratio_high_signal(tmp_path, monkeypatch):
     log_path = tmp_path / "relevance.jsonl"
     monkeypatch.setattr(relevance, "AFFINITY_LOG", log_path)
 
-    now_str = "2026-03-25T10:00:00+00:00"
+    now_str = _timestamp()
     # 5 items: 4 high (>=5), 1 low
     lines = [
         json.dumps({"timestamp": now_str, "source": "SignalFeed", "score": 8}),
@@ -265,7 +303,7 @@ def test_get_source_signal_ratio_high_noise(tmp_path, monkeypatch):
     log_path = tmp_path / "relevance.jsonl"
     monkeypatch.setattr(relevance, "AFFINITY_LOG", log_path)
 
-    now_str = "2026-03-25T10:00:00+00:00"
+    now_str = _timestamp()
     # 5 items: all score < 5 (pure noise)
     lines = [
         json.dumps({"timestamp": now_str, "source": "NoisyFeed", "score": 1}),
@@ -286,8 +324,8 @@ def test_get_source_signal_ratio_ignores_outside_window(tmp_path, monkeypatch):
     monkeypatch.setattr(relevance, "AFFINITY_LOG", log_path)
 
     # 5 old (outside 30-day window) + 5 recent noise items
-    old_str = "2025-01-01T10:00:00+00:00"   # well outside window
-    recent_str = "2026-03-25T10:00:00+00:00"
+    old_str = _timestamp(days_ago=31)
+    recent_str = _timestamp()
     lines = (
         [json.dumps({"timestamp": old_str, "source": "MixedFeed", "score": 9})] * 5
         + [json.dumps({"timestamp": recent_str, "source": "MixedFeed", "score": 1})] * 5
@@ -304,7 +342,7 @@ def test_get_source_signal_ratio_ignores_other_sources(tmp_path, monkeypatch):
     log_path = tmp_path / "relevance.jsonl"
     monkeypatch.setattr(relevance, "AFFINITY_LOG", log_path)
 
-    now_str = "2026-03-25T10:00:00+00:00"
+    now_str = _timestamp()
     lines = [
         # Target source: 5 high-signal items
         json.dumps({"timestamp": now_str, "source": "TargetFeed", "score": 8}),

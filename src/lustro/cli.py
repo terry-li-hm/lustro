@@ -87,7 +87,7 @@ def _source_since_date(
     cadence: str = "daily",
     now: datetime | None = None,
 ) -> str:
-    """Per-source since_date: own last-scan timestamp, or cadence-appropriate lookback for new sources."""
+    """Return a source's last scan or a cadence-appropriate lookback for new sources."""
     val = state.get(name)
     if val:
         dt = _parse_aware(val)
@@ -204,7 +204,11 @@ def _fetch_locked(cfg: LustroConfig, no_archive: bool) -> None:
                     failed_sources.append(f"{name} (RSS dead)")
             articles = articles or []
         elif "handle" in source:
-            articles = internalize_x_account(source["handle"], since_date, bird_path=cfg.resolve_bird())
+            articles = internalize_x_account(
+                source["handle"],
+                since_date,
+                bird_path=cfg.resolve_bird(),
+            )
         elif "linkedin" in source:
             articles = internalize_linkedin(
                 source["linkedin"],

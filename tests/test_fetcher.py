@@ -4,7 +4,14 @@ import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from lustro.fetcher import archive_cargo, internalize_rss, internalize_web, internalize_x_account, internalize_x_bookmarks, unbookmark_tweets
+from lustro.fetcher import (
+    archive_cargo,
+    internalize_rss,
+    internalize_web,
+    internalize_x_account,
+    internalize_x_bookmarks,
+    unbookmark_tweets,
+)
 
 
 class Entry(dict):

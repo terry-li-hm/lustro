@@ -180,23 +180,26 @@ def _write_weekly_log(cfg, log_date: str) -> None:
     cfg.data_dir.mkdir(parents=True, exist_ok=True)
     cfg.log_path.parent.mkdir(parents=True, exist_ok=True)
     cfg.log_path.write_text(
-        "\n".join([
-            f"## {log_date} (Automated Daily Scan)",
-            "",
-            "### Anthropic Blog",
-            "- [★] **[Claude 3.7 Sonnet released](https://anthropic.com/news/claude-3-7)**"
-            " (banking_angle: Major model upgrade for enterprise deployments)"
-            f" ({log_date}) — New extended thinking capability",
-            "",
-            "### The Batch",
-            f"- **[Weekly AI roundup](https://deeplearning.ai/batch)** ({log_date})"
-            " — Summary of this week in AI",
-            "",
-            "### Simon Willison",
-            "- [★] **[LLM tool use patterns](https://simonwillison.net/llm-tool-use)**"
-            f" (banking_angle: Agentic workflows for operations automation) ({log_date})"
-            " — Practical patterns for tool-calling agents",
-        ]) + "\n",
+        "\n".join(
+            [
+                f"## {log_date} (Automated Daily Scan)",
+                "",
+                "### Anthropic Blog",
+                "- [★] **[Claude 3.7 Sonnet released](https://anthropic.com/news/claude-3-7)**"
+                " (banking_angle: Major model upgrade for enterprise deployments)"
+                f" ({log_date}) — New extended thinking capability",
+                "",
+                "### The Batch",
+                f"- **[Weekly AI roundup](https://deeplearning.ai/batch)** ({log_date})"
+                " — Summary of this week in AI",
+                "",
+                "### Simon Willison",
+                "- [★] **[LLM tool use patterns](https://simonwillison.net/llm-tool-use)**"
+                f" (banking_angle: Agentic workflows for operations automation) ({log_date})"
+                " — Practical patterns for tool-calling agents",
+            ]
+        )
+        + "\n",
         encoding="utf-8",
     )
 
@@ -233,15 +236,18 @@ def test_load_log_entries_since_filters_by_date(xdg_env):
     cfg = load_config()
     cfg.log_path.parent.mkdir(parents=True, exist_ok=True)
     cfg.log_path.write_text(
-        "\n".join([
-            "## 2026-03-10 (Automated Daily Scan)",
-            "### Old Source",
-            "- **[Old article](https://example.com/old)** (2026-03-10) — Old news",
-            "",
-            "## 2026-03-22 (Automated Daily Scan)",
-            "### New Source",
-            "- [★] **[New article](https://example.com/new)** (2026-03-22) — Fresh signal",
-        ]) + "\n",
+        "\n".join(
+            [
+                "## 2026-03-10 (Automated Daily Scan)",
+                "### Old Source",
+                "- **[Old article](https://example.com/old)** (2026-03-10) — Old news",
+                "",
+                "## 2026-03-22 (Automated Daily Scan)",
+                "### New Source",
+                "- [★] **[New article](https://example.com/new)** (2026-03-22) — Fresh signal",
+            ]
+        )
+        + "\n",
         encoding="utf-8",
     )
     # Only entries on or after 2026-03-20 should be returned
@@ -353,7 +359,7 @@ def test_write_weekly_digest_omits_low_score_items(tmp_path):
 def test_run_weekly_digest_returns_count_and_path(xdg_env, monkeypatch, tmp_path):
     """run_weekly_digest writes file and returns correct item count."""
     cfg = load_config()
-    _write_weekly_log(cfg, "2026-03-24")
+    _write_weekly_log(cfg, datetime.now(timezone.utc).strftime("%Y-%m-%d"))
 
     # Point output to tmp_path (run_weekly_digest uses ~/notes/Reference)
     notes_ref = tmp_path / "notes" / "Reference"

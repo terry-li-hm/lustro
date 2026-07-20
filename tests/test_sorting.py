@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from lustro.sorting import (
     FATE_DEGRADE,
     FATE_STORE,
@@ -11,7 +9,6 @@ from lustro.sorting import (
     filter_for_log,
     sort_by_fate,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

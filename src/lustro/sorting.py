@@ -14,7 +14,6 @@ Items entering the endosome are sorted by receptor-ligand affinity (score):
 
 from __future__ import annotations
 
-
 FATE_TRANSCYTOSE = "transcytose"
 FATE_STORE = "store"
 FATE_DEGRADE = "degrade"

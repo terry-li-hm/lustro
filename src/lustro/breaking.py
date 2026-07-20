@@ -352,7 +352,8 @@ def _run_breaking_locked(
                 fp = title_fingerprint(title)
                 if fp in content_seen_this_run:
                     print(
-                        f"  Cross-source dedup: suppressed duplicate story from {source_name}: {title}",
+                        "  Cross-source dedup: suppressed duplicate story "
+                        f"from {source_name}: {title}",
                         file=sys.stderr,
                     )
                     continue
